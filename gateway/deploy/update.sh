@@ -6,6 +6,7 @@
 #   sudo ./gateway/deploy/update.sh --docker node-1  # only this container
 #   sudo ./gateway/deploy/update.sh --docker node-1 --image oauth-server-gateway:1.0.0  # and run it on this tag
 #   sudo ./gateway/deploy/update.sh --service        # only the systemd service
+#   sudo ./gateway/deploy/update.sh --docker node-1 --publish 10.0.0.2:8443:8443  # and publish a new handler's port
 #
 # The configuration, credentials and data are kept: the service keeps /etc/oauth-gateway and
 # /var/lib/oauth-gateway. Docker: the new image is built first, then each container is stopped,
@@ -22,6 +23,7 @@ MODE=""
 GIT_PULL=0
 CONTAINERS=()
 IMAGE_ARG=""
+PUBLISH=()
 
 usage() {
   cat <<'EOF'
@@ -32,6 +34,10 @@ Usage: sudo ./gateway/deploy/update.sh [options]
   --docker [NAME...] update these containers (default: every gateway container)
   --image TAG        build the image under this tag and run the containers on it
                      (default: the tag each container runs now)
+  --publish [IP:]HOST_PORT:PORT
+                     also publish this port on the containers, e.g. 10.0.0.2:8443:8443 for a
+                     handler added since the container was created (repeatable; docker run
+                     containers only: compose ones take their ports from the compose file)
   --wait SECONDS     how long a node may take to become healthy (default: 60)
   -h, --help         this help
 
@@ -47,6 +53,9 @@ while [ $# -gt 0 ]; do
       MODE=docker; shift
       while [ $# -gt 0 ] && [[ "$1" != -* ]]; do CONTAINERS+=("$1"); shift; done ;;
     --image) IMAGE_ARG=${2:?--image needs a value}; shift 2 ;;
+    --publish)
+      [[ "${2:-}" =~ ^(([0-9.]+|\[[0-9a-fA-F:]+\]):)?[0-9]+:[0-9]+(/(tcp|udp))?$ ]] || { echo "--publish needs [IP:]HOST_PORT:PORT, e.g. 10.0.0.2:8443:8443" >&2; exit 2; }
+      MODE=docker; PUBLISH+=("$2"); shift 2 ;;
     --wait) WAIT_SECONDS=${2:?--wait needs a value}; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -212,6 +221,8 @@ show_container_ready() {
 update_container() {
   local name=$1 image=$2 old_id=$3 options=()
   mapfile -t options < <(container_options "$name")
+  local spec
+  for spec in "${PUBLISH[@]}"; do options+=(-p "$spec"); done
 
   info "Stopping ${name}"
   docker rm -f "${name}-previous" >/dev/null 2>&1 || true
@@ -299,6 +310,7 @@ update_docker() {
   # One container at a time, so the other nodes keep serving while each restarts.
   for name in "${CONTAINERS[@]}"; do
     if [[ -n "$(docker inspect "$name" --format '{{index .Config.Labels "com.docker.compose.project"}}')" ]]; then
+      [[ ${#PUBLISH[@]} -eq 0 ]] || echo "WARNING: ${name} is a compose container: add the port to its compose file, --publish is ignored." >&2
       update_compose_container "$name" "${image_of[$name]}" "${old_id_of[$name]}" || failed=1
     else
       update_container "$name" "${image_of[$name]}" "${old_id_of[$name]}" || failed=1

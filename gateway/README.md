@@ -127,6 +127,7 @@ sudo bash gateway/deploy/update.sh          # add --git to git pull the reposito
 - Docker: an `oauth-gateway` service installed on the same server would hold the same ports, so it is stopped and disabled.
 - Service: it installs a new release with `install.sh`, restarts the service and waits for `/healthz`.
 - Docker: it builds the new image first, under the tag the container runs (or `--image <tag>`), while the old container still serves. Then, one container at a time, it stops the container, starts a new one on the new image with the same ports, settings and volumes, and removes the old container once the new one is healthy. Containers of a Docker Compose project are recreated by `docker compose`, so they stay in their project. The old image is removed once no container runs it.
+- Docker publishes a container's ports only when the container is created, so a handler added later isn't reachable until its port is published. `--publish [IP:]HOST_PORT:PORT` (repeatable) adds it while updating, for example `--docker node-1 --publish 10.0.0.2:8443:8443` to open port 8443 on the internal address only. Later updates keep it. Compose containers take their ports from the compose file instead.
 - A node that isn't healthy within 60 seconds (`--wait`) goes back to the previous release or image by itself.
 - The configuration, credentials and data stay. A node serves its last configuration at once, and the console's Nodes list shows the new version after its next status check.
 
