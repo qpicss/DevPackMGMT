@@ -91,6 +91,33 @@ The [gateway README](../../gateway/README.md) covers Docker, Docker Compose clus
 - **Console:** HTTP access logs on stdout (Apache combined format).
 - **Gateways:** `/healthz`, `/readyz` and Prometheus `/metrics` on port 9080; JSON logs on stdout; the console's **Live requests** page (every step of each request) and usage charts. Off-load request records to your log pipeline or an OpenTelemetry collector in each gateway's **Observability** settings.
 
+## Collecting a postmortem
+
+After an incident, run `deploy/postmortem.sh` on each server involved: the console's and every gateway's. The same script serves both, because it finds what runs on the server: the console as a service or Docker stack, and gateways as a service or containers.
+
+```bash
+sudo bash postmortem.sh                 # logs of the last 24 hours
+sudo bash postmortem.sh --since 2h      # or --since "2026-11-15 10:00"; --out <folder> (default /tmp)
+```
+
+It writes `/tmp/postmortem-<host>-<time>.tar.gz` with:
+
+- **System:** the clock (token checks fail when it is off), memory, disks and out-of-memory kills.
+- **Network:** addresses, listening ports, the firewall with Docker's `DOCKER-USER` chain, and the ports Docker publishes. A handler's port that a container doesn't publish isn't reachable.
+- **Gateway nodes:**
+  - state and published ports
+  - `/readyz`: the configuration version and whether every handler listens
+  - error metrics
+  - a summary of the configuration the node runs (handlers, APIs with their access, products, subscriptions)
+  - the certificate each port presents, and the log
+- **Console:**
+  - its settings
+  - the gateway link certificate
+  - for every gateway, its nodes (last seen, last push, last error, configuration version) against the deployed and the currently built configuration
+  - nginx errors and the log
+
+Settings whose names look secret are masked, and private keys and connection credentials are never read out. Read the archive before you send it anywhere all the same.
+
 ## Upgrading
 
 1. Back up the database.
