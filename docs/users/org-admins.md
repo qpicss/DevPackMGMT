@@ -184,7 +184,7 @@ Secrets are sealed in the database and never shown again after saving.
 
 ### EU Wallet gateways
 
-Choose **EU Wallet: Relying Party / Verifier** or **EU Wallet: Attestation Provider** as the type of a new gateway, then click **Wallet** on its page. **Up and running in five steps** at the top of the Wallet page lists what is left: certificates, trust anchors or credential types, the provider server, **Set up**, and a running node. **Fill in a diploma** and **Fill in the EU PID** prefill a credential type.
+Choose **EU Wallet: Relying Party / Verifier** or **EU Wallet: Attestation Provider** as the type of a new gateway, then click **Wallet** on its page. **Up and running in five steps** at the top of the Wallet page lists what is left: certificates, trust anchors or credential types, the provider server, **Set up**, and a running node. **Fill in a diploma**, **Fill in the EU PID** and **Fill in KYC** prefill a credential type. A verifier type can run **KYC** (minimum age, issuing countries, a valid document, evidence for AML records) on the PID; see [Tutorial 11](../tutorials/11-kyc-with-the-pid.md).
 
 The page also lists the **Verifications** or **Issued credentials**, with claim names but never values. You can suspend, reinstate or revoke an issued credential there.
 

@@ -11,10 +11,15 @@ oldapp/
 *.pfx
 *.p12
 *.key
-# Offline install bundles (deploy/offline/build-bundle.sh)
+# Deployment packages: offline bundles, Docker packs, update packages (they hold secrets)
 dist/
+oauth-console-docker-*/
+oauth-console-docker-*.tar.gz*
 
 # Private certificate chain (deploy/pki/create-ca.sh) and its key passwords
 mana2-pki/
 mana2-pki-passwords.txt
 *-pki-passwords.txt
+
+# Local notes about certificates
+ssl.txt

@@ -1,6 +1,6 @@
 # Concepts
 
-OAuth Server has two sides. **Providers** describe APIs and decide who may call them. **Developers** build applications that call those APIs. Both work in the same console, and what each person sees depends on their role.
+DevPackMGMT has two sides. **Providers** describe APIs and decide who may call them. **Developers** build applications that call those APIs. Both work in the same console, and what each person sees depends on their role.
 
 ```
 organization

@@ -11,6 +11,7 @@ The scripts live in the repository under `deploy/`:
 | `deploy/azure/provision-console.sh` | your machine | virtual network, Azure Database for MySQL, Key Vault, the console VM |
 | `deploy/azure/provision-gateway.sh` | your machine | ACR image, credentials in Key Vault, a virtual network, gateway VMs, a Standard Load Balancer |
 | `deploy/console/install.sh` | the console VM | installs the console as the `oauth-console` systemd service, with nginx and Let's Encrypt |
+| `deploy/console/update.sh` | the console VM | updates that service: database backup, new release, migration, restart and health check, with rollback |
 | `deploy/cloud/console-env.sh` | the console VM | writes `/etc/oauth-console/console.env` from SSM or Key Vault |
 | `deploy/cloud/gateway-node.sh` | each gateway VM | starts the gateway container; later `oauth-gateway-node <image>` updates it |
 | `deploy/offline/build-bundle.sh` | your machine | an offline bundle of the console, for a VM without internet access: see [Installing without internet access](offline-install.md) |
@@ -251,6 +252,8 @@ Each download of the credentials issues a new certificate. Download once per gat
 ## Updating
 
 **Console** (a few seconds of downtime; gateways keep serving):
+
+On a VM with MySQL reachable through `mysqldump`, one command does steps 1 to 4: copy the new release to the VM and run `sudo bash deploy/console/update.sh`. It backs the database up to `/var/backups/oauth-console/`, stops the service, installs the release, applies the migration, starts the service and waits for `/login`. If the migration fails or the console doesn't answer, it goes back to the previous release. Pass `--no-backup` after a snapshot of your own. By hand:
 
 1. Back up the database: an RDS snapshot (`aws rds create-db-snapshot`) or an Azure on-demand backup (`az mysql flexible-server backup create`).
 2. Copy the new release to the VM and run `sudo bash deploy/console/install.sh` again. It installs the release next to the old ones and restarts the service.

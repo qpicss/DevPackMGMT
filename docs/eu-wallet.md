@@ -6,7 +6,7 @@ Under eIDAS 2, every EU Member State must offer its citizens an EUDI Wallet by t
 
 | The business wants to | Product (gateway type) | EUDI role | Protocol |
 |---|---|---|---|
-| **Check** what a person shows from their wallet: identity, age, a diploma, a licence | **EU Wallet: Relying Party / Verifier** | Relying party | OpenID4VP 1.0 |
+| **Check** what a person shows from their wallet: identity, age, a diploma, a licence, and **KYC** for customer onboarding | **EU Wallet: Relying Party / Verifier** | Relying party | OpenID4VP 1.0 |
 | **Put** its own credentials into wallets: diplomas, employee badges, memberships, certificates | **EU Wallet: Attestation Provider** | Attestation provider (EAA issuer), for QTSPs/TSPs and their customers | OpenID4VCI 1.0 |
 
 Both run on the same console and gateway nodes as your APIs, with the same OAuth, products, usage charts, request log, clustering and deployment options.
@@ -74,6 +74,8 @@ The tutorials build exactly this: [Tutorial 9: Verify a diploma](tutorials/09-ve
 - **Privacy built in.** Claim values never reach the console's database or logs. The gateway asks only for the registered claims.
 - **Same operations as your APIs.** Usage charts, request log, metrics, clusters with Redis, push or pull deployment, Docker, systemd, AWS, Azure or offline installation.
 
+**KYC for banks, payment and crypto-asset providers, insurers and other obliged entities:** a KYC profile on a Verifier credential type turns the PID into customer onboarding. The gateway checks age, issuing country and document validity, compares the PID with the data the customer typed, and delivers evidence for your AML records: the issuer's certificate, the status check, a hash of the presentation, and optionally the signed presentation itself. No ID photos, no selfie videos. See [Tutorial 11: KYC with the PID](tutorials/11-kyc-with-the-pid.md).
+
 **For QTSPs and TSPs:** each of your customers gets its own Attestation Provider or Verifier gateway, configured with that customer's certificates, as a product you operate. Your customers keep their name on every credential and every request.
 
 ## Up and running in minimal steps
@@ -139,6 +141,7 @@ The graduate scans the code, enters the transaction code, and the diploma is in 
 |---|---|
 | [Tutorial 9: Verify a diploma](tutorials/09-verify-a-diploma.md) | The employer's side, from an empty console to a verified diploma in the HR system, with a complete provider server |
 | [Tutorial 10: Issue diplomas](tutorials/10-issue-diplomas.md) | The university's side: offers, the claims endpoint, revocation |
+| [Tutorial 11: KYC with the PID](tutorials/11-kyc-with-the-pid.md) | Customer onboarding: KYC rules, matching the form data, evidence for AML records |
 | [EU Wallet gateways: reference](guides/eu-wallet-gateway.md) | Every operation, check, reason code, setting and limit |
 | [Getting an access token](guides/access-tokens.md) | The OAuth client credentials grant the provider server uses |
 | [Run a gateway](tutorials/04-run-a-gateway.md) | Ports, nodes and push, in detail |

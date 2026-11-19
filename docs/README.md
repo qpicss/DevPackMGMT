@@ -1,6 +1,6 @@
-# OAuth Server documentation
+# DevPackMGMT documentation
 
-OAuth Server is an API management platform: providers publish APIs as products, developers get access for their applications, and gateways serve the traffic. This documentation is also in the console, under **Docs** in the menu.
+DevPackMGMT is an API management platform: providers publish APIs as products, developers get access for their applications, and gateways serve the traffic. This documentation is also in the console, under **Docs** in the menu.
 
 ## EU Digital Identity Wallet
 
@@ -10,6 +10,7 @@ Verify and issue EU Digital Identity Wallet credentials with a dedicated gateway
 |---|---|---|
 | **Check** credentials people show from their wallet: a diploma, identity, age | EU Wallet: Relying Party / Verifier | [Tutorial 9: Verify a diploma](tutorials/09-verify-a-diploma.md) |
 | **Issue** your credentials into wallets: diplomas, badges, memberships | EU Wallet: Attestation Provider | [Tutorial 10: Issue diplomas](tutorials/10-issue-diplomas.md) |
+| **Onboard customers** (KYC) with the PID: rules, form-data match, evidence for AML records | EU Wallet: Relying Party / Verifier with a KYC profile | [Tutorial 11: KYC with the PID](tutorials/11-kyc-with-the-pid.md) |
 | Understand the offer, the diploma example and the five steps to run each | | [EU Wallet overview](eu-wallet.md) |
 | Look up an operation, a check or a setting | | [EU Wallet gateways: reference](guides/eu-wallet-gateway.md) |
 
@@ -28,7 +29,7 @@ Running the console yourself? [Getting started](getting-started.md) installs it.
 
 ## Tutorials
 
-The first seven build on each other: work through them in order the first time. Tutorials 9 and 10 stand on their own and can be read in either order.
+The first seven build on each other: work through them in order the first time. Tutorials 9 and 10 stand on their own and can be read in either order; 11 builds on 9.
 
 | | Tutorial | For |
 |---|---|---|
@@ -42,6 +43,7 @@ The first seven build on each other: work through them in order the first time. 
 | 8 | [Run the platform](tutorials/08-run-the-platform.md): onboard an organization, help from inside, handle account requests | Site admins |
 | 9 | [Verify a diploma with the EU Wallet](tutorials/09-verify-a-diploma.md): a Verifier gateway and the employer's backend | Org admins, integrators |
 | 10 | [Issue diplomas into the EU Wallet](tutorials/10-issue-diplomas.md): an Attestation Provider gateway and the university's backend | Org admins, integrators |
+| 11 | [Onboard customers with KYC](tutorials/11-kyc-with-the-pid.md): a KYC profile on the PID, form-data matching and evidence | Org admins, integrators |
 
 ## Reference
 

@@ -3384,3 +3384,4 @@ pre.schema-code { overflow: auto; padding: 16px 20px; border-top: 0; }
 .check-row input { accent-color: var(--primary); }
 .plain-list { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 4px; }
 .preset-row { display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px; }
+.kyc-options { margin-top: 8px; padding-left: 12px; border-left: 2px solid var(--border); }

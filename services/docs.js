@@ -19,6 +19,7 @@ const SECTIONS = [
       { slug: 'eu-wallet', file: 'docs/eu-wallet.md', title: 'EU Wallet: verify and issue' },
       { slug: 'tutorials/09-verify-a-diploma', file: 'docs/tutorials/09-verify-a-diploma.md', title: '9. Verify a diploma' },
       { slug: 'tutorials/10-issue-diplomas', file: 'docs/tutorials/10-issue-diplomas.md', title: '10. Issue diplomas' },
+      { slug: 'tutorials/11-kyc-with-the-pid', file: 'docs/tutorials/11-kyc-with-the-pid.md', title: '11. KYC with the PID' },
       { slug: 'guides/eu-wallet-gateway', file: 'docs/guides/eu-wallet-gateway.md', title: 'EU Wallet gateways: reference' },
     ],
   },

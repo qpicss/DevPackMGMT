@@ -5,6 +5,7 @@
 // Private keys and the callback secret are sealed (utils/secretBox.js) and never returned.
 const crypto = require('crypto');
 const sequelize = require('../config/database');
+const { Op } = require('sequelize');
 const {
   Gateway, Catalog, Api, ApiProduct, ProductApi, Application, Subscription, Policy, Connection,
   WalletTrustAnchor, WalletCredentialType, WalletVerification, WalletIssuedCredential,
@@ -119,6 +120,7 @@ const serializeType = (type) => ({
   display: type.display,
   validityDays: type.validityDays,
   requireIssuerName: type.requireIssuerName,
+  kyc: type.kyc,
 });
 
 const serializeRegistration = (item) => {
@@ -351,6 +353,38 @@ const parseClaims = (value) => {
   });
 };
 
+// A KYC profile (verifiers): customer due diligence on the PID. Returns the profile, or null to turn
+// KYC off. The gateway checks the same rules (gateway/src/wallet/kyc.js).
+const KYC_EVIDENCE = ['summary', 'full'];
+const parseKyc = (raw) => {
+  if (raw === null || raw === false) return null;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new InputError('kyc must be an object, or null to turn KYC off');
+  const minimumAge = raw.minimumAge === undefined || raw.minimumAge === null || raw.minimumAge === '' ? null : whole(raw.minimumAge, null, 0, 120, 'The minimum age');
+  const countries = (Array.isArray(raw.allowedCountries) ? raw.allowedCountries : String(raw.allowedCountries || '').split(/[\s,;]+/))
+    .map((code) => String(code).trim().toUpperCase()).filter(Boolean);
+  if (countries.length > 300 || !countries.every((code) => /^[A-Z]{2}$/.test(code))) throw new InputError('Allowed countries are two-letter codes such as RO, DE');
+  const evidence = raw.evidence === undefined || raw.evidence === '' ? 'summary' : raw.evidence;
+  if (!KYC_EVIDENCE.includes(evidence)) throw new InputError('Evidence must be summary or full');
+  return {
+    minimumAge,
+    allowedCountries: [...new Set(countries)],
+    requireValidDocument: raw.requireValidDocument !== false && raw.requireValidDocument !== 'false',
+    evidence,
+  };
+};
+
+// The claims and trust anchors a KYC profile needs.
+const checkKyc = async (gateway, kyc, claims, anchorIds) => {
+  if (!kyc) return;
+  const needed = ['given_name', 'family_name', 'birthdate', ...(kyc.allowedCountries.length ? ['issuing_country'] : [])];
+  const missing = needed.filter((name) => !claims.some((claim) => claim.path.length === 1 && claim.path[0] === name && claim.required !== false));
+  if (missing.length) throw new InputError(`KYC needs these required claims: ${missing.join(', ')}`);
+  if (anchorIds.length) {
+    const others = await WalletTrustAnchor.count({ where: { id: anchorIds, gatewayId: gateway.id, entitlement: { [Op.ne]: 'PID' } } });
+    if (others) throw new InputError('KYC identifies people with the PID: choose PID provider trust anchors only');
+  }
+};
+
 const typeFields = async (gateway, body, current = null) => {
   const fields = {};
   if (!current || body.key !== undefined) {
@@ -370,6 +404,11 @@ const typeFields = async (gateway, body, current = null) => {
     fields.anchorIds = ids;
   }
   if (body.validityDays !== undefined) fields.validityDays = whole(body.validityDays, 365, 1, 3650, 'The validity');
+  if (body.kyc !== undefined) {
+    if (body.kyc && ROLE[gateway.kind] !== 'verifier') throw new InputError('KYC is for Relying Party / Verifier gateways');
+    fields.kyc = parseKyc(body.kyc);
+  }
+  await checkKyc(gateway, fields.kyc !== undefined ? fields.kyc : current?.kyc || null, fields.claims || current?.claims || [], fields.anchorIds || current?.anchorIds || []);
   if (body.requireIssuerName !== undefined) fields.requireIssuerName = body.requireIssuerName !== false && body.requireIssuerName !== 'false';
   if (body.display !== undefined) {
     const display = body.display || {};
@@ -502,7 +541,7 @@ const listRecords = handle('Failed to load the records', async (req, res) => {
     return res.json({
       verifications: rows.map((row) => ({
         id: row.sessionId, clientId: row.clientId, credentialType: row.credentialType, status: row.status, reason: row.reason,
-        issuer: row.issuer, reference: row.reference, claimNames: row.claimNames, callback: row.callback, startedAt: row.startedAt, completedAt: row.completedAt,
+        issuer: row.issuer, reference: row.reference, claimNames: row.claimNames, kyc: row.kyc, callback: row.callback, startedAt: row.startedAt, completedAt: row.completedAt,
       })),
     });
   }

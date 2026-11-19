@@ -33,10 +33,10 @@ const sendInvitationEmail = async ({ to, organizationName, inviterName, inviteUr
   await getTransport().sendMail({
     from: process.env.MAIL_FROM || process.env.SMTP_USER,
     to,
-    subject: `You're invited to join ${organizationName} on OAuth Server`,
-    text: `${inviterName} invited you to join ${organizationName} on OAuth Server.\n\n`
+    subject: `You're invited to join ${organizationName} on DevPackMGMT`,
+    text: `${inviterName} invited you to join ${organizationName} on DevPackMGMT.\n\n`
       + `Accept the invitation: ${inviteUrl}\n\nThis link expires in 7 days.`,
-    html: `<p>${escapeHtml(inviterName)} invited you to join <strong>${escapeHtml(organizationName)}</strong> on OAuth Server.</p>`
+    html: `<p>${escapeHtml(inviterName)} invited you to join <strong>${escapeHtml(organizationName)}</strong> on DevPackMGMT.</p>`
       + `<p><a href="${escapeHtml(inviteUrl)}">Accept the invitation</a></p>`
       + '<p>This link expires in 7 days.</p>',
   });

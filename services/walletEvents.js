@@ -16,6 +16,18 @@ const date = (value) => {
 };
 const names = (value) => (Array.isArray(value) ? value.filter((item) => typeof item === 'string').map((item) => item.slice(0, 200)).slice(0, 100) : []);
 
+// A KYC outcome as the gateway reports it: booleans only, so nothing else is kept.
+const kycOutcome = (value) => {
+  if (!value || typeof value !== 'object') return null;
+  const flags = (object) => Object.fromEntries(Object.entries(object && typeof object === 'object' ? object : {})
+    .filter(([name, flag]) => /^[A-Za-z0-9_.]{1,200}$/.test(name) && typeof flag === 'boolean').slice(0, 20));
+  return {
+    passed: value.passed === true,
+    checks: flags(value.checks),
+    ...(value.match && { match: flags(value.match), matched: value.matched === true }),
+  };
+};
+
 // Returns the number of events stored.
 const recordWalletEvents = async (gateway, events) => {
   if (!isWallet(gateway) || !Array.isArray(events) || !events.length) return 0;
@@ -33,6 +45,7 @@ const recordWalletEvents = async (gateway, events) => {
         issuer: str(event.issuer, 500),
         reference: str(event.reference, 200),
         claimNames: names(event.claimNames),
+        kyc: kycOutcome(event.kyc),
         startedAt: date(event.createdAt),
         completedAt: date(event.completedAt),
       };

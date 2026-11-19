@@ -93,7 +93,7 @@ Callbacks that fail are retried after 5 s, 30 s, 2 min, 10 min and 1 h.
 
 | Operation | Called by | What it does |
 |---|---|---|
-| `POST /wallet/verify/verifications` | provider server | `{ credentialType, claims?, redirectUri?, reference? }` → `{ id, request_uri, client_id, deep_link, expires_at }`. Show `deep_link` (`openid4vp://…`) as a QR code, or as a link on a phone. Asking for a claim the type doesn't have answers 403 `claim_not_allowed`. |
+| `POST /wallet/verify/verifications` | provider server | `{ credentialType, claims?, redirectUri?, reference?, match? }` (`match` for KYC types) → `{ id, request_uri, client_id, deep_link, expires_at }`. Show `deep_link` (`openid4vp://…`) as a QR code, or as a link on a phone. Asking for a claim the type doesn't have answers 403 `claim_not_allowed`. |
 | `GET /wallet/verify/verifications/{id}` | provider server | `{ status, reason?, issuer?, claims? }`. Claims appear only until the callback has delivered them. Other applications get 404. |
 | `GET` or `POST /wallet/verify/request/{id}` | wallet | The request object (`oauth-authz-req+jwt`), described below. It is served once; later calls get 410. |
 | `POST /wallet/verify/response/{id}` | wallet | The encrypted response (`direct_post.jwt`, ECDH-ES with A128GCM or A256GCM), or a plain `vp_token` if you chose `direct_post`. |
@@ -132,8 +132,45 @@ A result is `verified` or `failed`, with one of these reasons:
 - `holder_binding_missing`
 - `format_unsupported`
 - `wallet_declined`
+- for KYC types: `kyc_underage`, `kyc_country_not_allowed`, `kyc_document_expired`, `kyc_data_invalid`
 
-The callback gets `{ event: "verification.completed", id, reference, status, credentialType, issuer, claims }`. Once the provider server answers 2xx, the gateway deletes the claims. Results that were never delivered are kept for **Keep undelivered results** (24 hours by default).
+The callback gets `{ event: "verification.completed", id, reference, status, credentialType, issuer, claims }`, plus `kyc` for a KYC type. Once the provider server answers 2xx, the gateway deletes the claims and the KYC evidence. Results that were never delivered are kept for **Keep undelivered results** (24 hours by default).
+
+## KYC: customer due diligence with the PID
+
+A verifier credential type can carry a **KYC profile**, for onboarding customers with the PID. [Tutorial 11](../tutorials/11-kyc-with-the-pid.md) walks through it.
+
+**What a KYC type needs:**
+
+- the required claims `given_name`, `family_name` and `birthdate`, plus `issuing_country` when the countries are limited;
+- trust anchors with the entitlement **PID** only. The console refuses other anchors, lists them as a push problem if they appear, and the gateway refuses the configuration.
+
+| Option (`kyc` in the type) | Default | Refused with |
+|---|---|---|
+| `minimumAge`: 0 to 120, or null | null (no age rule) | `kyc_underage` |
+| `allowedCountries`: two-letter codes of the PID's `issuing_country` | `[]` (any) | `kyc_country_not_allowed` |
+| `requireValidDocument`: `date_of_expiry`, when disclosed, is not in the past; it is always requested when the type has it | true | `kyc_document_expired` |
+| `evidence`: `summary` or `full` | `summary` | |
+
+A `birthdate` that isn't a valid past date fails with `kyc_data_invalid`.
+
+**Starting a KYC verification.** `POST /wallet/verify/verifications` takes an extra `match`: up to 10 claims of the type with the values the provider server holds, for example `{ "family_name": "Stefanescu", "birthdate": "1990-05-01" }`. Values are compared ignoring case, accents, punctuation and spacing. Only types with a KYC profile accept `match`. The claims the rules need, and those in `match`, are always requested.
+
+**The result.** The callback's `kyc` holds:
+
+- `passed`;
+- `checks`: each rule that ran, true or false, among `birthdate`, `minimumAge`, `issuingCountry` and `documentValid`;
+- `match` and `matched`: whether each value sent in `match` equals the PID. A mismatch doesn't fail the verification;
+- `evidence`:
+  - `verifiedAt`, `verifier` (the `client_id`), `credentialType`, `vct` and `issuer`;
+  - `issuerCertificate`: subject, issuer, serial number, SHA-256 fingerprint and end date;
+  - `statusChecked`, `holderBound` and `nonce`;
+  - `presentationSha256`;
+  - with `full` only, `presentation`: the wallet's presentation, which can be verified again with the PID provider's CA certificate.
+
+A failed rule fails the verification with the reason and `kyc.checks`, and no claims or evidence. `GET /verifications/{id}` shows `kyc` without `evidence` once the claims are delivered. The console records the booleans only.
+
+**Not done by the gateway:** sanctions and PEP screening, risk scoring and record retention. They stay with the obliged entity, which uses the verified claims and the evidence.
 
 ## Issuer: OpenID4VCI
 

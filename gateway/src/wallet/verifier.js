@@ -7,9 +7,12 @@
 //
 // The request object is signed with the client's access certificate key (x5c, client_id prefix
 // x509_san_dns or x509_hash). Claims stay in the session store only until the provider server has them.
+// A type with a KYC profile (./kyc.js) also checks its rules, compares the provider server's
+// customer data (`match`) and delivers evidence; the evidence is forgotten with the claims.
 const crypto = require('crypto');
 const { WalletError, b64u, signJws, decryptJwe, parseJson } = require('./jose');
 const { verifySdJwtPresentation, pickClaims } = require('./sdjwt');
+const { requiredClaimsOf, parseMatch, evaluateKyc, buildEvidence } = require('./kyc');
 
 const QUERY_ID = 'credential';
 const REQUEST_TYP = 'oauth-authz-req+jwt';
@@ -44,11 +47,14 @@ const createVerifier = ({ wallet, sessions, statusFetcher, provider, events }) =
     ...(session.reason && { reason: session.reason }),
     ...(session.issuer && { issuer: session.issuer }),
     ...(withClaims && session.claims && { claims: session.claims }),
+    ...(session.kyc && { kyc: withClaims && session.claims ? session.kyc : withoutEvidence(session.kyc) }),
     ...(session.claimsDelivered && { claims_delivered: true }),
     created_at: session.createdAt,
     expires_at: session.expiresAt,
     ...(session.completedAt && { completed_at: session.completedAt }),
   });
+
+  const withoutEvidence = ({ evidence, ...rest }) => rest;
 
   const record = (session) => events.push({
     type: 'verification',
@@ -60,6 +66,8 @@ const createVerifier = ({ wallet, sessions, statusFetcher, provider, events }) =
     ...(session.issuer && { issuer: session.issuer }),
     ...(session.reference && { reference: session.reference }),
     claimNames: session.claimNames || [],
+    // Booleans only: which KYC rules passed and which customer data matched, never values.
+    ...(session.kyc && { kyc: withoutEvidence(session.kyc) }),
     createdAt: session.createdAt,
     ...(session.completedAt && { completedAt: session.completedAt }),
   });
@@ -79,6 +87,28 @@ const createVerifier = ({ wallet, sessions, statusFetcher, provider, events }) =
         if (!allowed) return failure(403, 'claim_not_allowed', `The claim ${path.join('.')} is not one of the claims registered for ${type.id}`);
         claims.push(allowed);
       }
+    }
+    let match = null;
+    if (type.kyc) {
+      // The KYC rules need their claims whatever the caller narrowed the request to.
+      const kycClaims = [...requiredClaimsOf(type.kyc), ...(type.kyc.requireValidDocument ? ['date_of_expiry'] : [])];
+      for (const name of kycClaims) {
+        const claim = type.claims.find((item) => samePath(item.path, [name]));
+        if (claim && !claims.some((item) => samePath(item.path, [name]))) claims.push(claim);
+      }
+      if (body.match !== undefined) {
+        try {
+          match = parseMatch(body.match, type);
+        } catch (error) {
+          return failure(400, 'invalid_request', error.message);
+        }
+        for (const name of Object.keys(match)) {
+          const path = name.split('.');
+          if (!claims.some((claim) => samePath(claim.path, path))) claims.push(type.claims.find((claim) => samePath(claim.path, path)));
+        }
+      }
+    } else if (body.match !== undefined) {
+      return failure(400, 'invalid_request', `match is only for credential types with a KYC profile; ${type.id} has none`);
     }
     let redirectUri = null;
     if (body.redirectUri !== undefined || body.redirect_uri !== undefined) {
@@ -106,6 +136,7 @@ const createVerifier = ({ wallet, sessions, statusFetcher, provider, events }) =
       responseMode: settings.responseMode,
       redirectUri,
       reference,
+      ...(match && { match }),
       status: 'pending',
       requestServed: false,
       createdAt: new Date(now).toISOString(),
@@ -177,6 +208,8 @@ const createVerifier = ({ wallet, sessions, statusFetcher, provider, events }) =
 
   const complete = async (session, outcome) => {
     Object.assign(session, outcome, { completedAt: new Date().toISOString() });
+    // The customer data to compare is no longer needed once the result is known.
+    delete session.match;
     const ttl = settings.resultRetentionHours * 3600;
     session.expiresAt = new Date(Date.now() + ttl * 1000).toISOString();
     await sessions.set(key(session.id), session, ttl);
@@ -190,6 +223,7 @@ const createVerifier = ({ wallet, sessions, statusFetcher, provider, events }) =
       ...(session.reason && { reason: session.reason }),
       ...(session.issuer && { issuer: session.issuer }),
       ...(session.claims && { claims: session.claims }),
+      ...(session.kyc && { kyc: session.kyc }),
     }, {
       // The provider server has the claims: the gateway forgets them.
       onDelivered: async () => {
@@ -197,6 +231,7 @@ const createVerifier = ({ wallet, sessions, statusFetcher, provider, events }) =
         if (!current) return;
         current.claims = null;
         current.claimsDelivered = true;
+        if (current.kyc) current.kyc = withoutEvidence(current.kyc);
         await sessions.set(key(session.id), current, Math.max(1, (new Date(current.expiresAt).getTime() - Date.now()) / 1000));
       },
     });
@@ -242,11 +277,23 @@ const createVerifier = ({ wallet, sessions, statusFetcher, provider, events }) =
       });
       await statusFetcher.check(verified.status, type.anchors);
       const claims = pickClaims(verified.claims, session.requested);
+      const claimNames = session.requested.map((claim) => claim.path.join('.'));
+      let kyc = null;
+      if (type.kyc) {
+        const { reason, result } = evaluateKyc({ kyc: type.kyc, claims: verified.claims, match: session.match });
+        if (reason) {
+          // A failed rule delivers no claims, only which rules failed.
+          await complete(session, { status: 'failed', reason, issuer: verified.issuer, claimNames, kyc: result });
+          return json(200, session.redirectUri ? { redirect_uri: session.redirectUri } : {});
+        }
+        kyc = { ...result, evidence: buildEvidence({ kyc: type.kyc, presentation, verified, session, verifierId: identity.clientId }) };
+      }
       await complete(session, {
         status: 'verified',
         issuer: verified.issuer,
         claims,
-        claimNames: session.requested.map((claim) => claim.path.join('.')),
+        claimNames,
+        ...(kyc && { kyc }),
       });
     } catch (error) {
       if (!(error instanceof WalletError)) throw error;

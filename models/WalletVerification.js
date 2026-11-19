@@ -23,6 +23,17 @@ const WalletVerification = sequelize.define('WalletVerification', {
       this.setDataValue('claimNames', JSON.stringify(value || []));
     },
   },
+  // KYC outcome, booleans only: { passed, checks: { rule: bool }, match: { claim: bool }, matched }.
+  kyc: {
+    type: DataTypes.TEXT,
+    get() {
+      const raw = this.getDataValue('kyc');
+      return raw ? JSON.parse(raw) : null;
+    },
+    set(value) {
+      this.setDataValue('kyc', value ? JSON.stringify(value) : null);
+    },
+  },
   // Delivery of the result to the provider server: delivered | failed.
   callback: { type: DataTypes.STRING(20) },
   startedAt: { type: DataTypes.DATE },

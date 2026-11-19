@@ -15,3 +15,11 @@ gateway/deploy
 *.key
 *.pfx
 *.p12
+# Private CA, certificate passwords and local notes: never in the image
+*-pki
+*-pki-passwords.txt
+ssl.txt
+.claude
+.vscode
+.github
+docs/plans

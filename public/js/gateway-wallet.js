@@ -39,6 +39,14 @@ UI.bindForm(document.getElementById('typeForm'), {
                 vct: formData.get('vct'),
                 claims: parseClaimLines(formData.get('claims')),
                 ...(isIssuer ? { validityDays: formData.get('validityDays') } : { anchorIds: formData.getAll('anchorIds') }),
+                ...(!isIssuer && formData.get('kycEnabled') === 'on' && {
+                    kyc: {
+                        minimumAge: formData.get('kycMinimumAge'),
+                        allowedCountries: formData.get('kycCountries'),
+                        requireValidDocument: formData.get('kycValidDocument') === 'on',
+                        evidence: formData.get('kycEvidence'),
+                    },
+                }),
             },
         });
         reloadWith('Credential type added');
@@ -52,6 +60,38 @@ document.querySelector('[data-pid-preset]')?.addEventListener('click', () => {
     form.elements.name.value = 'Person identification data (PID)';
     form.elements.vct.value = 'urn:eudi:pid:1';
     form.elements.claims.value = ['given_name', 'family_name', 'birthdate', 'nationalities?', 'place_of_birth?', 'address.locality?', 'issuing_country?'].join('\n');
+});
+
+// KYC options show only when KYC is on.
+const kycToggle = document.getElementById('typeKyc');
+const showKycOptions = () => {
+    const options = document.querySelector('[data-kyc-options]');
+    if (options) options.hidden = !kycToggle.checked;
+};
+kycToggle?.addEventListener('change', showKycOptions);
+
+// Customer onboarding (KYC) with the EU PID: the identification data AML due diligence asks for
+// (name, date and place of birth, nationality, address), with the PID provider anchors ticked.
+document.querySelector('[data-kyc-preset]')?.addEventListener('click', () => {
+    const form = document.getElementById('typeForm');
+    form.elements.key.value = 'kyc';
+    form.elements.name.value = 'KYC: person identification (PID)';
+    form.elements.vct.value = 'urn:eudi:pid:1';
+    form.elements.claims.value = [
+        'given_name', 'family_name', 'birthdate', 'place_of_birth?', 'nationalities?', 'address.formatted?', 'address.street_address?',
+        'address.house_number?', 'address.postal_code?', 'address.locality?', 'address.country?', 'personal_administrative_number?',
+        'issuing_country', 'issuing_authority?', 'date_of_expiry?', 'document_number?',
+    ].join('\n');
+    form.querySelectorAll('input[name="anchorIds"]').forEach((box) => {
+        box.checked = box.dataset.entitlement === 'PID';
+    });
+    kycToggle.checked = true;
+    showKycOptions();
+    form.elements.kycMinimumAge.value = 18;
+    form.elements.kycValidDocument.checked = true;
+    UI.toast(form.querySelector('input[name="anchorIds"][data-entitlement="PID"]')
+        ? 'KYC filled in. Set the countries and evidence you need, then add it.'
+        : 'KYC filled in. Add a PID provider trust anchor first: KYC trusts PID providers only.');
 });
 
 // A higher-education diploma. An example, not an EU rulebook: the issuer chooses the vct and the
@@ -196,6 +236,19 @@ const statusAction = (row, credential, action, label) => {
     row.append(button);
 };
 
+// "KYC passed · customer data matches", or which rule failed. Names only: records hold no values.
+const KYC_RULES = { birthdate: 'birth date', minimumAge: 'minimum age', issuingCountry: 'issuing country', documentValid: 'valid document' };
+const kycText = (kyc) => {
+    if (!kyc) return '';
+    if (!kyc.passed) {
+        const failed = Object.entries(kyc.checks || {}).filter(([, ok]) => !ok).map(([name]) => KYC_RULES[name] || name);
+        return ` · KYC failed${failed.length ? `: ${failed.join(', ')}` : ''}`;
+    }
+    if (!kyc.match) return ' · KYC passed';
+    const different = Object.entries(kyc.match).filter(([, same]) => !same).map(([name]) => name);
+    return ` · KYC passed · ${different.length ? `differs from customer data: ${different.join(', ')}` : 'customer data matches'}`;
+};
+
 async function loadRecords() {
     const body = document.querySelector('[data-records]');
     let result;
@@ -238,7 +291,7 @@ async function loadRecords() {
         } else {
             cell(row, when(item.startedAt));
             cell(row, item.credentialType);
-            cell(row, item.reason ? `${item.status} (${item.reason})` : item.status);
+            cell(row, `${item.reason ? `${item.status} (${item.reason})` : item.status}${kycText(item.kyc)}`);
             cell(row, item.issuer);
             cell(row, (item.claimNames || []).join(', '));
             cell(row, item.callback);

@@ -1,4 +1,4 @@
-# OAuth Server
+# DevPackMGMT
 
 An API management platform you run yourself. Describe your APIs with OpenAPI, bundle them into products, let developers register applications and request access, and serve the traffic through gateways that check OAuth tokens, enforce rate limits and run your policies.
 
@@ -8,10 +8,10 @@ An API management platform you run yourself. Describe your APIs with OpenAPI, bu
 
 | Product | For | The business's backend does |
 |---|---|---|
-| **EU Wallet: Relying Party / Verifier** | Employers, banks, rentals, platforms: check a diploma, identity (PID), age or licence | One call to start a verification, one signed webhook with the verified claims |
+| **EU Wallet: Relying Party / Verifier** | Employers, banks, rentals, platforms: check a diploma, identity (PID), age or licence, and run **KYC** for customer onboarding | One call to start a verification, one signed webhook with the verified claims (and, for KYC, the rule outcomes, form-data match and evidence) |
 | **EU Wallet: Attestation Provider** | Universities, employers, associations, and QTSPs/TSPs for their customers: issue diplomas, badges, memberships | One call to create an offer, one endpoint that supplies the claims, one call to revoke |
 
-Example: an employer verifies a candidate's university diploma from the candidate's wallet in about ten seconds, with no PDF and no e-mail to the university. Read the [EU Wallet overview](docs/eu-wallet.md), then [Tutorial 9: Verify a diploma](docs/tutorials/09-verify-a-diploma.md) and [Tutorial 10: Issue diplomas](docs/tutorials/10-issue-diplomas.md).
+Example: an employer verifies a candidate's university diploma from the candidate's wallet in about ten seconds, with no PDF and no e-mail to the university. A bank onboards a customer from the PID in their wallet, with age, country and document rules checked and evidence for its AML records. Read the [EU Wallet overview](docs/eu-wallet.md), then [Tutorial 9: Verify a diploma](docs/tutorials/09-verify-a-diploma.md), [Tutorial 10: Issue diplomas](docs/tutorials/10-issue-diplomas.md) and [Tutorial 11: KYC with the PID](docs/tutorials/11-kyc-with-the-pid.md).
 
 ## The platform
 

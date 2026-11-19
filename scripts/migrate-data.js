@@ -98,6 +98,12 @@ const NEW_COLUMNS = [
     walletSettings: { type: DataTypes.TEXT, allowNull: true },
     walletSecretsSealed: { type: DataTypes.TEXT, allowNull: true },
   }],
+  [WalletCredentialType, {
+    kyc: { type: DataTypes.TEXT, allowNull: true },
+  }],
+  [WalletVerification, {
+    kyc: { type: DataTypes.TEXT, allowNull: true },
+  }],
   [GatewayNode, {
     mode: { type: DataTypes.STRING(10), allowNull: false, defaultValue: 'push' },
     lastSeenAt: { type: DataTypes.DATE, allowNull: true },

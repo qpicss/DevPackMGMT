@@ -155,6 +155,9 @@ const buildWalletSection = async (gateway, { addProblem, connections }) => {
   if (role === 'verifier') {
     for (const type of types) {
       if (!type.anchorIds.some((id) => anchorIds.has(id))) addProblem(`Credential type "${type.name}" has no trust anchor, so no issuer would be trusted.`, fix('types', `Edit ${type.name}`));
+      if (type.kyc && anchors.some((anchor) => type.anchorIds.includes(anchor.id) && anchor.entitlement !== 'PID')) {
+        addProblem(`Credential type "${type.name}" runs KYC but trusts issuers other than PID providers. Choose PID trust anchors only.`, fix('types', `Edit ${type.name}`));
+      }
     }
   }
   if (settings.settings.requireWalletAttestation && !settings.walletProviderAnchorIds.some((id) => anchorIds.has(id))) {
@@ -222,6 +225,8 @@ const buildWalletSection = async (gateway, { addProblem, connections }) => {
       validityDays: type.validityDays,
       requireIssuerName: type.requireIssuerName,
       ...(type.display && { display: type.display }),
+      // Only when set, so configurations without KYC (and their hashes) stay as they were.
+      ...(role === 'verifier' && type.kyc && { kyc: type.kyc }),
     })),
     provider: {
       connectionId: provider.connectionId || null,

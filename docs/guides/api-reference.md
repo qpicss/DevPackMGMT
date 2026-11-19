@@ -149,7 +149,7 @@ All of these act on the selected organization. Members can read the organization
 | PUT | `/api/org/gateways/:id/wallet/settings` | `{ settings, provider: { connectionId, callbackUrl, claimsUrl }, walletProviderAnchorIds }` |
 | POST | `/api/org/gateways/:id/wallet/callback-secret` | A new callback secret, shown once |
 | POST, DELETE | `/api/org/gateways/:id/wallet/anchors[/:anchorId]` | Trust anchors `{ name, entitlement, certificatesPem }` |
-| POST, PUT, DELETE | `/api/org/gateways/:id/wallet/types[/:typeId]` | Credential types `{ key, name, vct, claims, anchorIds, validityDays }` |
+| POST, PUT, DELETE | `/api/org/gateways/:id/wallet/types[/:typeId]` | Credential types `{ key, name, vct, claims, anchorIds, validityDays, kyc }`; `kyc` (verifiers, PID anchors only) `{ minimumAge, allowedCountries, requireValidDocument, evidence: "summary" \| "full" }` or null |
 | POST | `/api/org/gateways/:id/wallet/setup` | Creates the built-in API, product and provider server application (secret shown once) |
 | GET | `/api/org/gateways/:id/wallet/records` | Verifications or issued credentials (metadata only) |
 | POST | `/api/org/gateways/:id/wallet/credentials/:credentialId/:action` | `revoke`, `suspend` or `reinstate` an issued credential |

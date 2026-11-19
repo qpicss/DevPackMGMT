@@ -54,7 +54,7 @@ In order, the installer:
    - `console.env`;
    - `.env`, with MySQL passwords made on the first run. They are kept afterwards, because the database volume uses them.
    - With `--domain`, the certificate in `tls/`. `APP_URL` is set to `https://<domain>`, `TRUST_PROXY=1` (one proxy: the nginx container), and port 3000 is published on `127.0.0.1` only.
-5. Starts MySQL. If its database is empty, it loads `newday.sql`. A database with tables is kept, unless you pass `--replace-db`.
+5. Starts MySQL. If its database is empty, it loads `newday.sql`. A database with tables is kept, unless you pass `--replace-db`. With `--migrate`, a kept database is first backed up to `/opt/oauth-console-docker/backups/` and then gets the tables and columns the new version needs. After its dry run, the installer says when that is needed.
 6. Starts the console (and nginx, and the gateway), runs a dry run of the migration, and waits until the console is healthy.
 
 | Option | Meaning |
@@ -64,6 +64,7 @@ In order, the installer:
 | `--url URL` | without `--domain`: the address users open, for `APP_URL` |
 | `--gateway FILE` | also run a gateway node on this host, with that gateway's credentials file. Add `https://<this host>:9443` as its node in the console. |
 | `--replace-db` | replace a database that already has data with the package's |
+| `--migrate` | upgrade: back up the kept database, then apply the schema changes of the new version (`scripts/migrate-data.js --apply`) before the console starts |
 
 MySQL is not published: only the console reaches it.
 

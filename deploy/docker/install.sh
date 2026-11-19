@@ -22,9 +22,13 @@
 #                                          (e.g. http://203.0.113.10:3000)
 #   --gateway FILE                         also run a gateway node here, with this credentials file
 #   --replace-db                           the database already has data: replace it with the package's
+#   --migrate                              the database is kept: back it up to /opt/oauth-console-docker/
+#                                          backups, then add the tables and columns the new console needs
+#                                          (scripts/migrate-data.js --apply) before it starts
 #
 # Run it again from a newer package to upgrade: it loads the new images and restarts the
-# containers; the database is kept (unless --replace-db).
+# containers; the database is kept (unless --replace-db). Add --migrate when the new version
+# changes the schema (the installer says so after its dry run).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -37,6 +41,7 @@ PFX=""
 PFX_PASSWORD_FILE=""
 GATEWAY_CREDENTIALS=""
 REPLACE=0
+MIGRATE=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -48,7 +53,8 @@ while [ $# -gt 0 ]; do
     --url) URL=${2:?--url needs a value}; shift 2 ;;
     --gateway) GATEWAY_CREDENTIALS=${2:?--gateway needs the credentials file}; shift 2 ;;
     --replace-db) REPLACE=1; shift ;;
-    -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
+    --migrate) MIGRATE=1; shift ;;
+    -h|--help) sed -n '2,34p' "$0"; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -209,6 +215,18 @@ if [[ -f "$HERE/newday.sql" ]] && { [[ "$tables" == 0 ]] || [[ $REPLACE -eq 1 ]]
   echo "Loaded: $(sql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='newday'") tables, $(sql -N -e 'SELECT COUNT(*) FROM newday.Users') users, $(sql -N -e 'SELECT COUNT(*) FROM newday.SystemKeys') system keys."
 elif [[ "$tables" != 0 ]]; then
   echo "The database already has ${tables} tables: kept. (--replace-db replaces it with the package's.)"
+  if [[ $MIGRATE -eq 1 ]]; then
+    # The old console stops first, so the backup and the migration see a quiet database.
+    compose stop console >/dev/null 2>&1 || true
+    mkdir -p "$DIR/backups"
+    backup="$DIR/backups/newday-$(date +%Y%m%d-%H%M%S).sql"
+    echo "Backing up to ${backup}"
+    compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump -uroot --single-transaction --routines newday' > "$backup" \
+      || fail "The backup failed: nothing was migrated."
+    chmod 600 "$backup"
+    echo "Migrating the schema"
+    compose run --rm --no-deps -T console node scripts/migrate-data.js --apply 2>&1 | sed 's/^/    /' || fail "The migration failed. Restore with: docker compose --project-directory ${DIR} exec -T mysql sh -c 'MYSQL_PWD=\"\$MYSQL_ROOT_PASSWORD\" mysql -uroot newday' < ${backup}"
+  fi
 else
   echo "Empty database: the console creates its tables on first start."
 fi
@@ -217,7 +235,11 @@ fi
 info "Starting the containers"
 compose up -d --remove-orphans
 echo "Schema check (a dry run of the migration):"
-compose exec -T console node scripts/migrate-data.js 2>&1 | tail -2 | sed 's/^/    /' || true
+schema="$(compose exec -T console node scripts/migrate-data.js 2>&1 || true)"
+echo "$schema" | tail -2 | sed 's/^/    /'
+if echo "$schema" | grep -qE '^ +(add column|create table|allow NULL)'; then
+  echo "    The database needs schema changes: run this installer again with --migrate (it backs up first)."
+fi
 for _ in $(seq 1 45); do
   [[ "$(docker inspect -f '{{.State.Health.Status}}' "$(compose ps -q console)")" == healthy ]] && break
   sleep 2

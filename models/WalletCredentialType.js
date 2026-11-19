@@ -27,6 +27,9 @@ const WalletCredentialType = sequelize.define('WalletCredentialType', {
   display: json('display', null),
   validityDays: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 365 },
   requireIssuerName: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+  // Verifiers only: a KYC profile (customer due diligence on the PID), or null.
+  // { minimumAge, allowedCountries, requireValidDocument, evidence: 'summary' | 'full' }
+  kyc: json('kyc', null),
 }, { timestamps: true });
 
 module.exports = WalletCredentialType;

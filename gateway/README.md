@@ -1,6 +1,6 @@
-# OAuth Server gateway
+# DevPackMGMT gateway
 
-The runtime that serves API traffic for OAuth Server. It is a separate Node.js 20 project with no database. Everything it serves comes from the management console. By default the console connects to the node: it checks that the node is alive, sends it the configuration and collects its usage. Alternatively the node connects to the console and pulls the configuration. Both directions use mutual TLS.
+The runtime that serves API traffic for DevPackMGMT. It is a separate Node.js 20 project with no database. Everything it serves comes from the management console. By default the console connects to the node: it checks that the node is alive, sends it the configuration and collects its usage. Alternatively the node connects to the console and pulls the configuration. Both directions use mutual TLS.
 
 ```
                   management console (this repo)

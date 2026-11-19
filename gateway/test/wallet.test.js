@@ -15,6 +15,7 @@ const jose = require('../src/wallet/jose');
 const { issueSdJwt, presentSdJwt, verifySdJwtPresentation } = require('../src/wallet/sdjwt');
 const { signStatusList, readEntry, encodeList } = require('../src/wallet/statusList');
 const { signatureHeader } = require('../src/wallet/provider');
+const kycModule = require('../src/wallet/kyc');
 
 const ISSUER = 'https://console.test';
 const AUDIENCE = 'oauth-server-gateway';
@@ -218,6 +219,20 @@ describe('wallet building blocks', () => {
     assert.equal(code(() => verifySdJwtPresentation(presentSdJwt(forged, { holderKey: owner.privateKey, aud: options.audience, nonce: 'n-1' }), options)), 'issuer_untrusted');
   });
 
+  it('evaluates KYC rules and matches regardless of case and accents', () => {
+    const kyc = { minimumAge: 18, allowedCountries: ['RO'], requireValidDocument: true, evidence: 'summary' };
+    const now = Date.parse('2026-11-19T12:00:00Z');
+    const base = { given_name: 'Ana', family_name: 'Ștefan', birthdate: '2008-11-19', issuing_country: 'ro' };
+    assert.equal(kycModule.evaluateKyc({ kyc, claims: base, now }).reason, null, 'eighteen today');
+    assert.equal(kycModule.evaluateKyc({ kyc, claims: { ...base, birthdate: '2008-11-20' }, now }).reason, 'kyc_underage');
+    assert.equal(kycModule.evaluateKyc({ kyc, claims: { ...base, birthdate: '2008-02-30' }, now }).reason, 'kyc_data_invalid');
+    assert.equal(kycModule.evaluateKyc({ kyc, claims: { ...base, date_of_expiry: '2026-11-18' }, now }).reason, 'kyc_document_expired');
+    assert.equal(kycModule.evaluateKyc({ kyc: { ...kyc, minimumAge: null, allowedCountries: [] }, claims: { ...base, issuing_country: 'XX' }, now }).reason, null);
+    const { result } = kycModule.evaluateKyc({ kyc, claims: base, match: { family_name: '  STEFAN ', given_name: 'Anna' }, now });
+    assert.deepEqual(result.match, { family_name: true, given_name: false });
+    assert.equal(kycModule.normalize('Ștefan-Ion  Pop'), 'stefan ion pop');
+  });
+
   it('packs status list entries of two bits', () => {
     const lst = encodeList(64, 2, new Map([[3, 1], [10, 2], [63, 1]]));
     assert.deepEqual([0, 3, 10, 63].map((index) => readEntry(lst, 2, index)), [0, 1, 2, 1]);
@@ -267,11 +282,11 @@ describe('wallet gateway: relying party / verifier', () => {
     body: body !== undefined ? JSON.stringify(body) : form !== undefined ? new URLSearchParams(form).toString() : undefined,
   });
 
-  const credential = ({ claims = { given_name: 'Ana', family_name: 'Pop', degree: 'MSc' }, statusIndex = 5, list = 1, leaf = issuerLeaf } = {}) => issueSdJwt({
+  const credential = ({ claims = { given_name: 'Ana', family_name: 'Pop', degree: 'MSc' }, statusIndex = 5, list = 1, leaf = issuerLeaf, vct = 'https://example.org/diploma' } = {}) => issueSdJwt({
     privateKey: leaf.privateKey,
     x5c: x5c(leaf),
     iss: 'https://university.example',
-    vct: 'https://example.org/diploma',
+    vct,
     claims,
     holderJwk: owner.jwk,
     status: { status_list: { idx: statusIndex, uri: `${provider.statusUrl}/lists/${list}` } },
@@ -316,10 +331,18 @@ describe('wallet gateway: relying party / verifier', () => {
           registrationCertificates: [{ id: 'r1', jwt: 'eyJhbGciOiJub25lIn0.eyJzdWIiOiJ0ZXN0In0.' }],
         },
         settings: {},
-        anchors: [{ id: 'a1', name: 'Diploma Issuer CA', entitlement: 'EAA', certificates: issuerCa.certificate }],
+        anchors: [
+          { id: 'a1', name: 'Diploma Issuer CA', entitlement: 'EAA', certificates: issuerCa.certificate },
+          { id: 'a-pid', name: 'PID provider', entitlement: 'PID', certificates: issuerCa.certificate },
+        ],
         credentialTypes: [{
           id: 'diploma', name: 'Diploma', vct: 'https://example.org/diploma', anchorIds: ['a1'],
           claims: [{ path: ['given_name'] }, { path: ['degree'] }, { path: ['family_name'], required: false }],
+        }, {
+          id: 'kyc', name: 'KYC', vct: 'urn:eudi:pid:1', anchorIds: ['a-pid'],
+          claims: [{ path: ['given_name'] }, { path: ['family_name'] }, { path: ['birthdate'] }, { path: ['issuing_country'] },
+            { path: ['date_of_expiry'], required: false }, { path: ['address', 'locality'], required: false }],
+          kyc: { minimumAge: 18, allowedCountries: ['ro', 'DE'], requireValidDocument: true, evidence: 'full' },
         }],
         provider: { connectionId: 'conn-provider', callbackUrl: `${provider.url}/callback`, callbackSecret: 'cb-secret' },
       },
@@ -417,6 +440,92 @@ describe('wallet gateway: relying party / verifier', () => {
     assert.equal((await call('/wallet/verify/verifications', { method: 'POST', body: { credentialType: 'diploma' }, client: 'nobody' })).status, 403);
   });
 
+  const pid = (overrides = {}) => credential({
+    vct: 'urn:eudi:pid:1',
+    claims: { given_name: 'Ioana', family_name: 'Ștefănescu', birthdate: '1990-05-01', issuing_country: 'RO', date_of_expiry: '2031-01-01', address: { locality: 'Cluj-Napoca' }, ...overrides },
+  });
+  const presentPid = (overrides) => (request) => presentSdJwt(pid(overrides), { holderKey: owner.privateKey, aud: request.client_id, nonce: request.nonce });
+
+  it('runs KYC on a PID: rules, customer matching and evidence', async () => {
+    // The caller narrows the claims, but the KYC claims are always asked for.
+    const res = await call('/wallet/verify/verifications', {
+      method: 'POST',
+      body: { credentialType: 'kyc', claims: ['family_name'], reference: 'customer-9', match: { family_name: 'stefanescu', birthdate: '1990-05-01', 'address.locality': 'Cluj' } },
+    });
+    assert.equal(res.status, 201);
+    const started = await res.json();
+    const { request } = await answerAsWallet(started, { present: presentPid() });
+    assert.deepEqual(request.dcql_query.credentials[0].claims.map((claim) => claim.path.join('.')),
+      ['family_name', 'given_name', 'birthdate', 'issuing_country', 'date_of_expiry', 'address.locality']);
+
+    const delivered = await waitFor(() => provider.seen.callbacks.find((item) => item.json.id === started.id), 'the KYC callback');
+    const { kyc } = delivered.json;
+    assert.equal(delivered.json.status, 'verified');
+    assert.equal(kyc.passed, true);
+    assert.deepEqual(kyc.checks, { birthdate: true, minimumAge: true, issuingCountry: true, documentValid: true });
+    // Accents and case are ignored; a different locality is not a match.
+    assert.deepEqual(kyc.match, { family_name: true, birthdate: true, 'address.locality': false });
+    assert.equal(kyc.matched, false);
+    assert.equal(kyc.evidence.vct, 'urn:eudi:pid:1');
+    assert.equal(kyc.evidence.verifier, 'x509_san_dns:wallet.example');
+    assert.equal(kyc.evidence.statusChecked, true);
+    assert.equal(kyc.evidence.issuerCertificate.fingerprint256, new crypto.X509Certificate(issuerLeaf.certificate).fingerprint256);
+    assert.equal(kyc.evidence.presentationSha256, crypto.createHash('sha256').update(kyc.evidence.presentation).digest('hex'));
+    // The full evidence is the wallet's presentation: it verifies again later.
+    const again = verifySdJwtPresentation(kyc.evidence.presentation, {
+      anchors: [new crypto.X509Certificate(issuerCa.certificate)], vcts: ['urn:eudi:pid:1'], nonce: kyc.evidence.nonce, audience: kyc.evidence.verifier,
+    });
+    assert.equal(again.claims.family_name, 'Ștefănescu');
+
+    // Once delivered, the gateway keeps the outcome but neither claims nor evidence.
+    let result = null;
+    for (let count = 0; count < 50 && !result?.claims_delivered; count += 1) {
+      result = await (await call(`/wallet/verify/verifications/${started.id}`)).json();
+      if (!result.claims_delivered) await sleep(20);
+    }
+    assert.equal(result.kyc.passed, true);
+    assert.equal(result.kyc.evidence, undefined);
+    assert.equal(result.claims, undefined);
+  });
+
+  it('fails KYC rules with a reason and delivers no claims', async () => {
+    const year = new Date().getUTCFullYear();
+    await failsWith('kyc_underage', { present: presentPid({ birthdate: `${year - 10}-01-01` }) }, { credentialType: 'kyc' });
+    await failsWith('kyc_country_not_allowed', { present: presentPid({ issuing_country: 'FR' }) }, { credentialType: 'kyc' });
+    await failsWith('kyc_document_expired', { present: presentPid({ date_of_expiry: '2020-01-01' }) }, { credentialType: 'kyc' });
+    await failsWith('kyc_data_invalid', { present: presentPid({ birthdate: 'unknown' }) }, { credentialType: 'kyc' });
+  });
+
+  it('accepts match only on KYC types and only for their claims', async () => {
+    const onDiploma = await call('/wallet/verify/verifications', { method: 'POST', body: { credentialType: 'diploma', match: { given_name: 'Ana' } } });
+    assert.equal(onDiploma.status, 400);
+    const unknown = await call('/wallet/verify/verifications', { method: 'POST', body: { credentialType: 'kyc', match: { personal_administrative_number: '1' } } });
+    assert.equal(unknown.status, 400);
+    assert.match((await unknown.json()).message, /not a claim of kyc/);
+  });
+
+  it('refuses a KYC type that trusts non-PID anchors or lacks the KYC claims', async () => {
+    const push = (type) => managementRequest({
+      port: ports.managementPort, method: 'PUT', path: '/v1/config', client: pki.management, pki,
+      body: baseConfig(pki, {
+        kind: 'wallet-verifier', publicUrl: 'https://wallet.example', handlerPort, api: verifierApi, connections: [], version: `bad-${type.id}`,
+        wallet: {
+          role: 'verifier',
+          identity: { accessCertificateChain: chainPem(verifierAccess, accessCa), accessKey: { provider: 'sealed', privateKey: verifierAccess.privateKey } },
+          anchors: [{ id: 'a1', entitlement: 'EAA', certificates: issuerCa.certificate }, { id: 'p', entitlement: 'PID', certificates: issuerCa.certificate }],
+          credentialTypes: [type],
+        },
+      }),
+    });
+    const claims = ['given_name', 'family_name', 'birthdate'].map((name) => ({ path: [name] }));
+    const eaa = await push({ id: 'k1', vct: 'urn:eudi:pid:1', anchorIds: ['a1'], claims, kyc: {} });
+    assert.equal(eaa.status, 400);
+    assert.match(eaa.body.message, /PID provider trust anchors only/);
+    const noBirthdate = await push({ id: 'k2', vct: 'urn:eudi:pid:1', anchorIds: ['p'], claims: claims.slice(0, 2), kyc: {} });
+    assert.equal(noBirthdate.status, 400);
+    assert.match(noBirthdate.body.message, /required claim birthdate/);
+  });
+
   it('reports verifications to the console without claim values', async () => {
     const res = await managementRequest({ port: ports.managementPort, path: '/v1/usage', client: pki.management, pki });
     const events = res.body.wallet;
@@ -424,6 +533,10 @@ describe('wallet gateway: relying party / verifier', () => {
     assert.ok(verified.length >= 1);
     assert.deepEqual(verified[0].claimNames, ['given_name', 'degree']);
     assert.ok(!JSON.stringify(events).includes('Ana'), 'no claim value leaves the gateway in events');
+    assert.ok(!/Ioana|Ștefănescu|stefanescu|Cluj/.test(JSON.stringify(events)), 'no KYC value or match input leaves the gateway in events');
+    const kycEvent = events.find((event) => event.type === 'verification' && event.credentialType === 'kyc' && event.status === 'verified');
+    assert.deepEqual(kycEvent.kyc, { passed: true, checks: { birthdate: true, minimumAge: true, issuingCountry: true, documentValid: true }, match: { family_name: true, birthdate: true, 'address.locality': false }, matched: false });
+    assert.ok(events.some((event) => event.type === 'verification' && event.reason === 'kyc_underage' && event.kyc.checks.minimumAge === false));
     assert.ok(events.some((event) => event.type === 'callback' && event.outcome === 'delivered'));
   });
 });

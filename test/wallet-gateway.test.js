@@ -223,6 +223,58 @@ describe('EU Wallet gateways in the console', () => {
     assert.equal((await WalletVerification.findOne()).status, 'verified');
   });
 
+  it('runs KYC on PID types only, with PID anchors and the identification claims', async () => {
+    const gateway = await createWalletGateway();
+    const { anchorId: pidAnchor } = await configure(gateway.id);
+    const url = `/api/org/gateways/${gateway.id}/wallet`;
+    const eaa = await api('post', `${url}/anchors`, admin).send({ name: 'Universities', entitlement: 'EAA', certificatesPem: accessCa.certificate });
+    const claims = ['given_name', 'family_name', 'birthdate', 'issuing_country', { path: 'date_of_expiry', required: false }];
+    const kyc = { minimumAge: '18', allowedCountries: 'ro, de', requireValidDocument: true, evidence: 'full' };
+    const add = (body) => api('post', `${url}/types`, admin).send({ key: 'kyc', name: 'KYC', vct: 'urn:eudi:pid:1', claims, anchorIds: [pidAnchor], kyc, ...body });
+
+    const otherIssuers = await add({ anchorIds: [pidAnchor, eaa.body.anchor.id] });
+    assert.equal(otherIssuers.status, 400);
+    assert.match(otherIssuers.body.error, /PID provider trust anchors only/);
+    const noBirthdate = await add({ claims: ['given_name', 'family_name', 'issuing_country'] });
+    assert.equal(noBirthdate.status, 400);
+    assert.match(noBirthdate.body.error, /birthdate/);
+    assert.equal((await add({ kyc: { ...kyc, allowedCountries: 'Romania' } })).status, 400);
+    assert.equal((await add({ kyc: { ...kyc, evidence: 'everything' } })).status, 400);
+
+    const created = await add({});
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    assert.deepEqual(created.body.type.kyc, { minimumAge: 18, allowedCountries: ['RO', 'DE'], requireValidDocument: true, evidence: 'full' });
+
+    // The profile reaches the gateway, which compiles it; types without KYC carry no kyc field.
+    const setup = await api('post', `${url}/setup`, admin);
+    await Gateway.update({ catalogId: setup.body.catalog.id }, { where: { id: gateway.id } });
+    const { config, problems } = await buildGatewayConfig(await load(gateway.id));
+    assert.deepEqual(problems.filter((problem) => !/connection handler/.test(problem)), []);
+    assert.equal(config.wallet.credentialTypes.find((type) => type.id === 'pid').kyc, undefined);
+    assert.deepEqual(config.wallet.credentialTypes.find((type) => type.id === 'kyc').kyc.allowedCountries, ['RO', 'DE']);
+    assert.equal(compileConfig(config, { gatewayId: gateway.id }).wallet.types.get('kyc').kyc.minimumAge, 18);
+
+    // Removing a required claim, or turning KYC off, is checked on update too.
+    const typeUrl = `${url}/types/${created.body.type.id}`;
+    assert.equal((await api('put', typeUrl, admin).send({ claims: ['given_name', 'family_name'] })).status, 400);
+    assert.equal((await api('put', typeUrl, admin).send({ kyc: null })).body.type.kyc, null);
+
+    // Issuers have no KYC profile.
+    const issuer = await createWalletGateway('wallet-issuer');
+    const refused = await api('post', `/api/org/gateways/${issuer.id}/wallet/types`, admin).send({ key: 'x', name: 'X', vct: 'v', claims, kyc });
+    assert.equal(refused.status, 400);
+  });
+
+  it('records KYC outcomes as booleans only', async () => {
+    const gateway = await createWalletGateway();
+    await recordWalletEvents(await load(gateway.id), [{
+      type: 'verification', id: 'kyc-1', credentialType: 'kyc', status: 'verified', claimNames: ['family_name'],
+      kyc: { passed: true, checks: { minimumAge: true, note: 'Ana' }, match: { family_name: false, 'bad name!': true }, matched: false, evidence: { presentation: 'eyJ...' } },
+    }]);
+    const records = await api('get', `/api/org/gateways/${gateway.id}/wallet/records`, admin);
+    assert.deepEqual(records.body.verifications[0].kyc, { passed: true, checks: { minimumAge: true }, match: { family_name: false }, matched: false });
+  });
+
   it('issues status list blocks per node and publishes revocations in the configuration', async () => {
     const gateway = await createWalletGateway('wallet-issuer');
     await configure(gateway.id, { issuer: true });

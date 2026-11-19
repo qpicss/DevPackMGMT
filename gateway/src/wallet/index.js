@@ -14,6 +14,7 @@ const { createStatusFetcher, STATUS } = require('./statusList');
 const { createProviderClient } = require('./provider');
 const { createVerifier } = require('./verifier');
 const { createIssuer } = require('./issuer');
+const { compileKyc } = require('./kyc');
 
 const ROLES = ['verifier', 'issuer'];
 const BUILTINS = { verifier: 'wallet-verifier', issuer: 'wallet-issuer' };
@@ -124,6 +125,14 @@ const compileWallet = (wallet, { publicUrl }) => {
     assert(claims.length, `Credential type ${type.id} needs at least one claim`);
     const typeAnchors = (Array.isArray(type.anchorIds) ? type.anchorIds : []).flatMap((id) => anchors.get(id)?.certificates || []);
     if (wallet.role === 'verifier') assert(typeAnchors.length, `Credential type ${type.id} has no trust anchor`);
+    let kyc = null;
+    if (type.kyc) {
+      assert(wallet.role === 'verifier', `Credential type ${type.id}: KYC is for Relying Party / Verifier gateways`);
+      kyc = compileKyc(type.kyc, type.id, claims, assert);
+      // KYC identifies a person with the PID: only PID providers may be trusted for it.
+      assert((type.anchorIds || []).every((id) => !anchors.has(id) || anchors.get(id).entitlement === 'PID'),
+        `Credential type ${type.id}: KYC accepts PID provider trust anchors only`);
+    }
     types.set(type.id, {
       id: type.id,
       name: typeof type.name === 'string' ? type.name : type.id,
@@ -133,6 +142,7 @@ const compileWallet = (wallet, { publicUrl }) => {
       requireIssuerName: type.requireIssuerName !== false,
       validityDays: whole(type.validityDays, 365, 1, 3650) || 365,
       display: isObject(type.display) ? type.display : null,
+      kyc,
     });
   }
   assert(types.size, 'Configure at least one credential type');

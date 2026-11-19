@@ -207,6 +207,15 @@
                                         <span class="cell-secondary">Claims: <%= type.claims.map((claim) => claim.path.join('.') + (claim.required ? '' : ' (optional)')).join(', ') %></span>
                                         <% if (!isIssuer) { %>
                                             <span class="cell-secondary">Trusted issuers: <%= type.anchorIds.map((anchorId) => (wallet.anchors.find((anchor) => anchor.id === anchorId) || {}).name).filter(Boolean).join(', ') || 'none' %></span>
+                                            <% if (type.kyc) { %>
+                                                <span class="cell-secondary"><span class="badge">KYC</span>
+                                                    <%= [
+                                                        type.kyc.minimumAge !== null ? `${type.kyc.minimumAge}+` : null,
+                                                        type.kyc.allowedCountries.length ? `PIDs from ${type.kyc.allowedCountries.join(', ')}` : 'PIDs from any country',
+                                                        type.kyc.requireValidDocument ? 'valid document' : null,
+                                                        type.kyc.evidence === 'full' ? 'full evidence' : 'evidence summary',
+                                                    ].filter(Boolean).join(' · ') %></span>
+                                            <% } %>
                                         <% } else { %>
                                             <span class="cell-secondary">Valid for <%= type.validityDays %> days</span>
                                         <% } %>
@@ -225,6 +234,7 @@
                             <button type="button" class="btn btn-secondary btn-sm" data-diploma-preset>Fill in a diploma (example)</button>
                             <% if (!isIssuer) { %>
                                 <button type="button" class="btn btn-secondary btn-sm" data-pid-preset>Fill in the EU PID (urn:eudi:pid:1)</button>
+                                <button type="button" class="btn btn-secondary btn-sm" data-kyc-preset>Fill in KYC (customer onboarding with the PID)</button>
                             <% } %>
                         </div>
                         <div class="field">
@@ -254,8 +264,31 @@
                                 <legend>Trusted issuers (trust anchors)</legend>
                                 <% if (!wallet.anchors.length) { %><span class="hint">Add a trust anchor first.</span><% } %>
                                 <% wallet.anchors.forEach((anchor) => { %>
-                                    <label class="check-row"><input type="checkbox" name="anchorIds" value="<%= anchor.id %>"> <%= anchor.name %> <span class="muted">(<%= anchor.entitlement %>)</span></label>
+                                    <label class="check-row"><input type="checkbox" name="anchorIds" value="<%= anchor.id %>" data-entitlement="<%= anchor.entitlement %>"> <%= anchor.name %> <span class="muted">(<%= anchor.entitlement %>)</span></label>
                                 <% }) %>
+                            </fieldset>
+                            <fieldset class="field" id="kyc">
+                                <legend>KYC (customer due diligence)</legend>
+                                <label class="check-row" for="typeKyc"><input type="checkbox" id="typeKyc" name="kycEnabled" aria-describedby="kyc-hint"> Run KYC on this credential</label>
+                                <span id="kyc-hint" class="hint">For the PID only, with PID provider trust anchors. Needs the required claims given_name, family_name and birthdate (and issuing_country to limit countries). The gateway checks the rules, compares your customer data when you send it, and adds evidence to the callback.</span>
+                                <div class="kyc-options stack-sm" data-kyc-options hidden>
+                                    <div class="field">
+                                        <label for="kycMinimumAge">Minimum age</label>
+                                        <input class="input input-sm" type="number" id="kycMinimumAge" name="kycMinimumAge" min="0" max="120" placeholder="18">
+                                    </div>
+                                    <div class="field">
+                                        <label for="kycCountries">PIDs issued by (country codes)</label>
+                                        <input class="input mono" type="text" id="kycCountries" name="kycCountries" maxlength="900" placeholder="Empty: any country. Or e.g. RO, DE, FR">
+                                    </div>
+                                    <label class="check-row" for="kycValidDocument"><input type="checkbox" id="kycValidDocument" name="kycValidDocument" checked> Refuse a PID whose document has expired (date_of_expiry)</label>
+                                    <div class="field">
+                                        <label for="kycEvidence">Evidence in the callback</label>
+                                        <select class="select" id="kycEvidence" name="kycEvidence">
+                                            <option value="summary">Summary: issuer, certificate, status check, hash of the presentation</option>
+                                            <option value="full">Full: the summary plus the signed presentation, to check again later</option>
+                                        </select>
+                                    </div>
+                                </div>
                             </fieldset>
                         <% } %>
                         <div id="type-alert" class="alert alert-danger" role="alert" hidden>
