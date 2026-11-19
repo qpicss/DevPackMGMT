@@ -18,6 +18,7 @@ const { getPki } = require('../utils/pki');
 const { open } = require('../utils/secretBox');
 const { buildGatewayConfig } = require('./gatewayConfig');
 const { recordUsage } = require('./usage');
+const { recordWalletEvents } = require('./walletEvents');
 const { loadGateway } = require('./gatewayQueries');
 const { linkSettings } = require('../utils/linkSettings');
 const { nextTask, completeTask } = require('./linkTasks');
@@ -157,6 +158,8 @@ const createLinkApp = ({ logger = console } = {}) => {
   app.post('/v1/usage', async (req, res, next) => {
     try {
       const stored = await recordUsage(req.gateway, Array.isArray(req.body?.records) ? req.body.records.slice(0, 50000) : []);
+      // Wallet gateways send their verifications and issued credentials along.
+      if (Array.isArray(req.body?.wallet)) await recordWalletEvents(req.gateway, req.body.wallet.slice(0, 50000));
       res.json({ stored });
     } catch (error) {
       next(error);

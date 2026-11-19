@@ -88,6 +88,7 @@
                                 <option value="basic" <%= auth.type === 'basic' ? 'selected' : '' %>>Basic (username and password)</option>
                                 <option value="bearer" <%= auth.type === 'bearer' ? 'selected' : '' %>>Bearer token</option>
                                 <option value="header" <%= auth.type === 'header' ? 'selected' : '' %>>API key header</option>
+                                <option value="oauth2" <%= auth.type === 'oauth2' ? 'selected' : '' %>>OAuth 2.0 client credentials</option>
                             </select>
                         </div>
                         <div class="field" data-auth="basic">
@@ -98,7 +99,31 @@
                             <label for="authHeaderName">Header name</label>
                             <input class="input input-sm mono" type="text" id="authHeaderName" name="authHeaderName" value="<%= auth.headerName || '' %>" placeholder="x-api-key" maxlength="100">
                         </div>
-                        <div class="field" data-auth="basic bearer header">
+                        <div class="field" data-auth="oauth2">
+                            <label for="authTokenUrl">Token URL</label>
+                            <input class="input input-sm mono" type="url" id="authTokenUrl" name="authTokenUrl" value="<%= auth.tokenUrl || '' %>" placeholder="https://auth.example.com/oauth/token" maxlength="2048">
+                            <p class="hint">The gateway gets an access token here (grant client_credentials), keeps it until it expires and sends it as Authorization: Bearer.</p>
+                        </div>
+                        <div class="field" data-auth="oauth2">
+                            <label for="authClientId">Client ID</label>
+                            <input class="input input-sm mono" type="text" id="authClientId" name="authClientId" value="<%= auth.clientId || '' %>" maxlength="255" autocomplete="off">
+                        </div>
+                        <div class="field" data-auth="oauth2">
+                            <label for="authClientAuthMethod">Client authentication</label>
+                            <select class="select" id="authClientAuthMethod" name="authClientAuthMethod">
+                                <option value="client_secret_basic" <%= auth.clientAuthMethod !== 'client_secret_post' ? 'selected' : '' %>>HTTP Basic (client_secret_basic)</option>
+                                <option value="client_secret_post" <%= auth.clientAuthMethod === 'client_secret_post' ? 'selected' : '' %>>In the form (client_secret_post)</option>
+                            </select>
+                        </div>
+                        <div class="field" data-auth="oauth2">
+                            <label for="authScope">Scope <span class="muted">(optional)</span></label>
+                            <input class="input input-sm mono" type="text" id="authScope" name="authScope" value="<%= auth.scope || '' %>" maxlength="500">
+                        </div>
+                        <div class="field" data-auth="oauth2">
+                            <label for="authAudience">Audience <span class="muted">(optional)</span></label>
+                            <input class="input input-sm mono" type="text" id="authAudience" name="authAudience" value="<%= auth.audience || '' %>" maxlength="500">
+                        </div>
+                        <div class="field" data-auth="basic bearer header oauth2">
                             <label for="authSecret" data-secret-label>Secret</label>
                             <input class="input input-sm" type="password" id="authSecret" name="authSecret" autocomplete="new-password" placeholder="<%= auth.hasSecret ? 'Saved. Leave empty to keep it.' : '' %>">
                         </div>

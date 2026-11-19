@@ -3378,3 +3378,9 @@ pre.schema-code { overflow: auto; padding: 16px 20px; border-top: 0; }
 .doc-content ol { list-style: decimal; }
 .doc-content li::marker { color: var(--text-subtle); }
 .docs-search { display: block; width: 100%; }
+
+/* Wallet gateway page */
+.check-row { display: flex; align-items: center; gap: 8px; font-weight: 450; }
+.check-row input { accent-color: var(--primary); }
+.plain-list { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 4px; }
+.preset-row { display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px; }

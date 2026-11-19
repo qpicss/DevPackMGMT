@@ -63,6 +63,29 @@ const Gateway = sequelize.define('Gateway', {
   offloadSecretSealed: {
     type: DataTypes.TEXT,
   },
+  // 'api' (proxies APIs), 'wallet-verifier' (EU Wallet relying party) or 'wallet-issuer'
+  // (EU Wallet attestation provider). Fixed when the gateway is created.
+  kind: {
+    type: DataTypes.STRING(20),
+    allowNull: false,
+    defaultValue: 'api',
+  },
+  // Wallet gateways: the client's identity (certificates, registration certificates), provider
+  // server and settings, without secrets (see services/walletConfig.js).
+  walletSettings: {
+    type: DataTypes.TEXT,
+    get() {
+      const raw = this.getDataValue('walletSettings');
+      return raw ? JSON.parse(raw) : {};
+    },
+    set(value) {
+      this.setDataValue('walletSettings', JSON.stringify(value || {}));
+    },
+  },
+  // Wallet gateways: the access and issuer private keys and the callback secret, sealed together as JSON.
+  walletSecretsSealed: {
+    type: DataTypes.TEXT,
+  },
 }, {
   timestamps: true,
 });

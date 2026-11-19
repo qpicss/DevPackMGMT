@@ -6,12 +6,17 @@ const { compileRoutes, normalizeBasePath } = require('./routes');
 const { checkScriptSyntax, PolicyError } = require('./policy');
 const { normalizeFlow, flowErrors, defaultFlow } = require('./flow');
 const { compileFlow } = require('./flowEngine');
+const { compileWallet, WalletConfigError, BUILTINS } = require('./wallet');
 
 // 2: APIs and handlers carry policy flows (flow.js) instead of single policy scripts.
+// 3: an EU Wallet gateway (kind wallet-verifier or wallet-issuer) with a `wallet` section.
 const SCHEMA = 2;
+const WALLET_SCHEMA = 3;
+const SCHEMAS = [SCHEMA, WALLET_SCHEMA];
+const KINDS = { 'wallet-verifier': 'verifier', 'wallet-issuer': 'issuer' };
 const PROTOCOLS = ['http', 'https'];
 const PERIODS = ['second', 'minute', 'hour', 'day'];
-const AUTH_TYPES = ['none', 'basic', 'bearer', 'header'];
+const AUTH_TYPES = ['none', 'basic', 'bearer', 'header', 'oauth2'];
 // 'subscription' (default): a token and an approved subscription. 'public': anyone, no token.
 const ACCESS = ['subscription', 'public'];
 // A handler's home: where a request for "/" on its port is redirected, e.g. /site/.
@@ -51,6 +56,15 @@ const validateConnections = (connections) => {
     assert(Number.isInteger(connection.connectTimeoutMs) && connection.connectTimeoutMs > 0, `Connection "${connection.name}" needs a connect timeout`);
     assert(Number.isInteger(connection.retries) && connection.retries >= 0 && connection.retries <= 5, `Connection "${connection.name}" allows 0 to 5 retries`);
     assert(!connection.auth || AUTH_TYPES.includes(connection.auth.type), `Connection "${connection.name}" has an unknown auth type`);
+    if (connection.auth?.type === 'oauth2') {
+      let tokenUrl = null;
+      try {
+        tokenUrl = new URL(connection.auth.tokenUrl);
+      } catch {
+        tokenUrl = null;
+      }
+      assert(tokenUrl && ['http:', 'https:'].includes(tokenUrl.protocol) && connection.auth.clientId, `Connection "${connection.name}" needs a token URL and client ID for OAuth client credentials`);
+    }
   }
 };
 
@@ -64,6 +78,7 @@ const validateApis = (apis, connectionIds) => {
     assert(!basePaths.has(basePath), `APIs "${basePaths.get(basePath)}" and "${api.name}" share the base path ${basePath}`);
     basePaths.set(basePath, api.name);
     assert(api.access === undefined || ACCESS.includes(api.access), `API "${api.name}" has an unknown access mode`);
+    assert(api.builtin === undefined || Object.values(BUILTINS).includes(api.builtin), `API "${api.name}" names an unknown built-in API`);
 
     // Only Invoke steps that call "the API's backend" need it.
     if (api.upstreamUrl) {
@@ -109,12 +124,26 @@ const flowEntry = (key, policy, label, connectionIds) => {
 
 const compileConfig = (config, credentials) => {
   assert(isPlainObject(config), 'The configuration must be a JSON object');
-  assert(config.schema === SCHEMA, `Unsupported configuration schema ${config.schema}; this gateway understands schema ${SCHEMA}`);
+  assert(SCHEMAS.includes(config.schema), `Unsupported configuration schema ${config.schema}; this gateway understands schemas ${SCHEMAS.join(' and ')}`);
   assert(isPlainObject(config.gateway) && config.gateway.id === credentials.gatewayId,
     'This configuration was built for a different gateway');
   assert(typeof config.version === 'string' && config.version, 'The configuration has no version');
 
   const connections = config.connections || [];
+  // Wallet gateways (schema 3) carry the client's certificates, keys and credential types.
+  let wallet = null;
+  if (config.schema === WALLET_SCHEMA) {
+    const role = KINDS[config.gateway.kind];
+    assert(role, 'A schema 3 configuration must be for a wallet gateway');
+    assert(config.wallet && config.wallet.role === role, 'The wallet section does not match the gateway kind');
+    try {
+      wallet = compileWallet(config.wallet, { publicUrl: config.gateway.publicUrl });
+    } catch (error) {
+      if (error instanceof WalletConfigError) throw new ConfigError(error.message);
+      throw error;
+    }
+    assert(!wallet.provider.connectionId || connections.some((connection) => connection.id === wallet.provider.connectionId), 'The provider server connection is not in the configuration');
+  }
   validateHandlers(config.handlers);
   validateConnections(connections);
   validateApis(config.apis, new Set(connections.map((connection) => connection.id)));
@@ -186,7 +215,8 @@ const compileConfig = (config, credentials) => {
     observability: config.observability || {},
     admin: { enabled: true, ...(config.admin || {}) },
     management: config.management || {},
+    wallet,
   };
 };
 
-module.exports = { compileConfig, ConfigError, SCHEMA };
+module.exports = { compileConfig, ConfigError, SCHEMA, WALLET_SCHEMA };

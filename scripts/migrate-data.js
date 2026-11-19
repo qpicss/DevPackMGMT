@@ -52,6 +52,10 @@ const {
   Connection,
   UsageRecord,
   Membership,
+  WalletTrustAnchor,
+  WalletCredentialType,
+  WalletVerification,
+  WalletIssuedCredential,
 } = require('../models');
 const { slugify } = require('../utils/basePath');
 const { defaultFlow, normalizeFlow, defaultConfig } = require('../gateway/src/flow');
@@ -64,6 +68,7 @@ const NEW_TABLES = [
   Organization, Invitation, Api, ApiProduct, ProductApi, Subscription,
   SystemKey, Catalog, CatalogProduct, Gateway, GatewayNode, GatewayHandler, Policy,
   GatewayCredential, Connection, UsageRecord, Membership,
+  WalletTrustAnchor, WalletCredentialType, WalletVerification, WalletIssuedCredential,
 ];
 const NEW_COLUMNS = [
   [User, {
@@ -88,6 +93,10 @@ const NEW_COLUMNS = [
     autoPush: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     observability: { type: DataTypes.TEXT, allowNull: true },
     offloadSecretSealed: { type: DataTypes.TEXT, allowNull: true },
+    // EU Wallet gateways (existing gateways are API gateways).
+    kind: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'api' },
+    walletSettings: { type: DataTypes.TEXT, allowNull: true },
+    walletSecretsSealed: { type: DataTypes.TEXT, allowNull: true },
   }],
   [GatewayNode, {
     mode: { type: DataTypes.STRING(10), allowNull: false, defaultValue: 'push' },

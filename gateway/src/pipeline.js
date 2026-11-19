@@ -190,7 +190,7 @@ const executeFlows = async ({ flows, state, shared, runScript, invokeContext, ch
   }
 };
 
-const createRequestHandler = ({ handler, getRuntime, settings, rateLimiter, policyRunner, connections, observability, logger, failureTracker }) => async (req, res) => {
+const createRequestHandler = ({ handler, getRuntime, settings, rateLimiter, policyRunner, connections, observability, logger, failureTracker, wallet = null }) => async (req, res) => {
   const started = performance.now();
   const span = startSpan(req.headers);
   const requestId = REQUEST_ID.test(req.headers['x-request-id'] || '') ? req.headers['x-request-id'] : randomUUID();
@@ -254,6 +254,17 @@ const createRequestHandler = ({ handler, getRuntime, settings, rateLimiter, poli
       res.writeHead(302, { ...responseHeaders, location: `${handler.homePath}${url.search}`, 'content-length': 0 });
       res.end();
       finish(302, { redirect: handler.homePath });
+      return;
+    }
+
+    // A wallet issuer's metadata lives at the host root, outside its API's base path.
+    const known = runtime.wallet && wallet ? wallet.wellKnown(req.method, url.pathname, runtime.gateway.publicUrl) : null;
+    if (known) {
+      gatewayStep('route', 'Route', `Wallet issuer metadata ${url.pathname}`);
+      const body = req.method === 'HEAD' ? Buffer.alloc(0) : known.body;
+      res.writeHead(known.status, { ...known.headers, ...responseHeaders, 'content-length': known.body.length });
+      res.end(body);
+      finish(known.status, { access: 'public', bytesOut: body.length });
       return;
     }
 
@@ -353,7 +364,8 @@ const createRequestHandler = ({ handler, getRuntime, settings, rateLimiter, poli
     });
 
     // The port's flow first, then the API's, each seeing the previous one's changes.
-    const flows = [runtime.flows.get(`handler:${handler.id}`), runtime.flows.get(`api:${route.api.id}`)].filter(Boolean);
+    // A built-in wallet API answers itself after the port's flow; it has no policy flow of its own.
+    const flows = [runtime.flows.get(`handler:${handler.id}`), route.api.builtin ? null : runtime.flows.get(`api:${route.api.id}`)].filter(Boolean);
     const runScript = async (flow, node, input) => {
       try {
         const result = await policyRunner.run(runtime.policyGeneration, scriptKey(flow.key, node.id), input, node.config.timeoutMs, {
@@ -416,6 +428,32 @@ const createRequestHandler = ({ handler, getRuntime, settings, rateLimiter, poli
         },
       },
     });
+
+    if (route.api.builtin && !state.replied && !state.stream) {
+      const checked = performance.now();
+      if (!wallet) throw new HttpError(503, 'not_configured', 'This gateway does not run wallet APIs');
+      const answer = await wallet.handle({
+        method: req.method,
+        operationPath: route.operation.path,
+        params: route.params,
+        headers: req.headers,
+        body: rawBody,
+        clientId,
+      }, runtime.gateway.publicUrl, route.api.builtin);
+      state.response = { status: answer.status, headers: answer.headers, body: answer.body };
+      state.replied = true;
+      state.repliedBy = route.api.name;
+      // The outcome only: claims, tokens and codes stay out of the request log.
+      let outcome = `Built-in ${route.api.builtin} answered ${answer.status}`;
+      if (answer.status >= 400) {
+        try {
+          outcome += ` (${JSON.parse(answer.body.toString('utf8')).error})`;
+        } catch {
+          // not JSON
+        }
+      }
+      gatewayStep('wallet', route.api.name, outcome, { durationMs: since(checked) });
+    }
 
     if (state.watches.length && failureTracker) recordAnswer(state.watches, state.stream ? state.stream.statusCode : finalResponse(state).status, failureTracker);
 

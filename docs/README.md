@@ -2,6 +2,17 @@
 
 OAuth Server is an API management platform: providers publish APIs as products, developers get access for their applications, and gateways serve the traffic. This documentation is also in the console, under **Docs** in the menu.
 
+## EU Digital Identity Wallet
+
+Verify and issue EU Digital Identity Wallet credentials with a dedicated gateway. The business brings its certificates and its backend; the gateway does the wallet protocols and the cryptography, under the business's name.
+
+| You want to | Product | Start here |
+|---|---|---|
+| **Check** credentials people show from their wallet: a diploma, identity, age | EU Wallet: Relying Party / Verifier | [Tutorial 9: Verify a diploma](tutorials/09-verify-a-diploma.md) |
+| **Issue** your credentials into wallets: diplomas, badges, memberships | EU Wallet: Attestation Provider | [Tutorial 10: Issue diplomas](tutorials/10-issue-diplomas.md) |
+| Understand the offer, the diploma example and the five steps to run each | | [EU Wallet overview](eu-wallet.md) |
+| Look up an operation, a check or a setting | | [EU Wallet gateways: reference](guides/eu-wallet-gateway.md) |
+
 ## Start with your role
 
 | You are | You want to | Start here |
@@ -17,7 +28,7 @@ Running the console yourself? [Getting started](getting-started.md) installs it.
 
 ## Tutorials
 
-The first seven build on each other: work through them in order the first time.
+The first seven build on each other: work through them in order the first time. Tutorials 9 and 10 stand on their own and can be read in either order.
 
 | | Tutorial | For |
 |---|---|---|
@@ -29,6 +40,8 @@ The first seven build on each other: work through them in order the first time.
 | 6 | [Protect an API with a flow](tutorials/06-protect-an-api-with-a-flow.md): validation, threat protection, a script, the real backend | Org admins |
 | 7 | [Work as a team](tutorials/07-work-as-a-team.md): invitations, roles, several organizations | Org admins, members |
 | 8 | [Run the platform](tutorials/08-run-the-platform.md): onboard an organization, help from inside, handle account requests | Site admins |
+| 9 | [Verify a diploma with the EU Wallet](tutorials/09-verify-a-diploma.md): a Verifier gateway and the employer's backend | Org admins, integrators |
+| 10 | [Issue diplomas into the EU Wallet](tutorials/10-issue-diplomas.md): an Attestation Provider gateway and the university's backend | Org admins, integrators |
 
 ## Reference
 
@@ -43,6 +56,7 @@ The first seven build on each other: work through them in order the first time.
 - [REST API reference](guides/api-reference.md): every endpoint of the console.
 - [API examples](guides/api-examples.md): end-to-end scripts, from publishing an API to calling it.
 - [Managing people](guides/managing-people.md): site admins, org admins and members through the API.
+- [EU Wallet gateways: reference](guides/eu-wallet-gateway.md): every wallet operation, check, reason code, setting and limit.
 
 **Operating**
 

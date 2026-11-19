@@ -2,6 +2,19 @@
 
 An API management platform you run yourself. Describe your APIs with OpenAPI, bundle them into products, let developers register applications and request access, and serve the traffic through gateways that check OAuth tokens, enforce rate limits and run your policies.
 
+## EU Digital Identity Wallet, ready in five steps
+
+**Verify and issue EU Digital Identity Wallet credentials without building the wallet protocols yourself.** A business brings its certificates and its own backend; a dedicated gateway does OpenID4VP and OpenID4VCI, signing, encryption, SD-JWT VC, trust chains, key binding and revocation lists, under the business's own name.
+
+| Product | For | The business's backend does |
+|---|---|---|
+| **EU Wallet: Relying Party / Verifier** | Employers, banks, rentals, platforms: check a diploma, identity (PID), age or licence | One call to start a verification, one signed webhook with the verified claims |
+| **EU Wallet: Attestation Provider** | Universities, employers, associations, and QTSPs/TSPs for their customers: issue diplomas, badges, memberships | One call to create an offer, one endpoint that supplies the claims, one call to revoke |
+
+Example: an employer verifies a candidate's university diploma from the candidate's wallet in about ten seconds, with no PDF and no e-mail to the university. Read the [EU Wallet overview](docs/eu-wallet.md), then [Tutorial 9: Verify a diploma](docs/tutorials/09-verify-a-diploma.md) and [Tutorial 10: Issue diplomas](docs/tutorials/10-issue-diplomas.md).
+
+## The platform
+
 It has two parts:
 
 - **The console** (this directory): an Express app with server-rendered pages and a REST API. It is where organizations design APIs, publish products, approve access and run gateways.
@@ -23,7 +36,8 @@ It has two parts:
 - **Gateways.**
   - Push or pull configuration, single nodes or clusters (shared rate limits with Redis), HTTP and HTTPS ports.
   - Request flows built in a visual editor: scripts, conditions, service calls, OpenAPI request and body validation, and threat protection.
-  - Upstream connections with retries, circuit breakers, credentials and mTLS.
+  - Upstream connections with retries, circuit breakers, credentials (including OAuth client credentials) and mTLS.
+- **EU Wallet gateways.** A dedicated gateway per client, as a Relying Party / Verifier (OpenID4VP) or an Attestation Provider (OpenID4VCI) for EU Digital Identity Wallets. The client brings its certificates and its provider server; the gateway signs, verifies, issues SD-JWT VCs and publishes their status list.
 - **Observability.** Live request log, Prometheus metrics, W3C tracing, off-loading to HTTP or OpenTelemetry, and usage charts per application, product and API.
 - **Guided tours and built-in docs.** The **?** button in the console header walks you through the page you are on, and **Docs** in the menu opens this documentation with a guide for each role.
 
@@ -47,6 +61,7 @@ To serve traffic you also need a gateway. See [Run a gateway](docs/tutorials/04-
 
 | | |
 |---|---|
+| [EU Digital Identity Wallet](docs/eu-wallet.md) | The two wallet products, a diploma example, and five steps to run each |
 | [Getting started](docs/getting-started.md) | Install, configure and sign in for the first time |
 | [Concepts](docs/concepts.md) | Organizations, catalogs, products, applications and gateways, and how they fit |
 | [Users and roles](docs/users/README.md) | Developers, org admins and site admins: what each can do, with a guide for each |
@@ -55,6 +70,7 @@ To serve traffic you also need a gateway. See [Run a gateway](docs/tutorials/04-
 | [REST API](docs/guides/api-reference.md) | The console's endpoints |
 | [API examples](docs/guides/api-examples.md) | End-to-end scripts against the REST API |
 | [Managing people](docs/guides/managing-people.md) | Site admins, org admins and members through the API |
+| [EU Wallet gateways: reference](docs/guides/eu-wallet-gateway.md) | Every wallet operation, check, setting and limit |
 | [Operations](docs/guides/operations.md) | Production setup, migrations, backups and certificates |
 | [Security](docs/guides/security.md) | What is protected and how |
 | [Development](docs/guides/development.md) | Architecture, tests and conventions |

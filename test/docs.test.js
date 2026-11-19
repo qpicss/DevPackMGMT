@@ -24,7 +24,9 @@ describe('documentation pages', () => {
   it('lists every Markdown file of docs/ in the menu', () => {
     const files = fs.readdirSync(path.join(__dirname, '..', 'docs'), { recursive: true })
       .filter((file) => file.endsWith('.md'))
-      .map((file) => `docs/${file.split(path.sep).join('/')}`);
+      .map((file) => `docs/${file.split(path.sep).join('/')}`)
+      // Design plans for upcoming work are not user documentation.
+      .filter((file) => !file.startsWith('docs/plans/'));
     const listed = new Set(docs.PAGES.map((page) => page.file));
     assert.deepEqual(files.filter((file) => !listed.has(file)), []);
   });

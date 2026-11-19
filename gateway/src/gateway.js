@@ -27,6 +27,7 @@ const { sendJson } = require('./http');
 const { createFailureTracker } = require('./threats');
 const { findOperation } = require('./routes');
 const { createTicketVerifier } = require('./adminTicket');
+const { createWalletService } = require('./wallet');
 
 const CONFIG_FILE = 'config.json';
 
@@ -80,6 +81,8 @@ const createGateway = (overrides = {}) => {
   const rateLimiter = createRateLimiter({ redisUrl: settings.redisUrl, gatewayId: credentials.gatewayId, logger });
   const policyRunner = new PolicyRunner({ size: settings.policyWorkers, logger, host: scriptHost });
   const connections = new UpstreamConnections({ settings, metrics: observability.metrics, logger });
+  // EU Wallet roles (configuration schema 3); idle on API gateways.
+  const wallet = createWalletService({ settings, connections, logger, nodeName, gatewayId: credentials.gatewayId });
   let runtime = null;
   const verifyTicket = createTicketVerifier({ gatewayId: credentials.gatewayId });
   let appliedAt = null;
@@ -99,6 +102,7 @@ const createGateway = (overrides = {}) => {
       observability,
       logger,
       failureTracker,
+      wallet,
     }),
   });
 
@@ -123,6 +127,7 @@ const createGateway = (overrides = {}) => {
       certificateValidTo: credentials.validTo,
       certificateFingerprint: credentials.fingerprint,
       apis: runtime ? runtime.config.apis.length : 0,
+      ...(runtime?.wallet && { wallet: wallet.status() }),
       handlers: handlers.status(),
       connections: connections.status(),
       rateLimits: rateLimiter.status(),
@@ -149,6 +154,7 @@ const createGateway = (overrides = {}) => {
       throw new ConfigError(error instanceof PolicyError ? error.message : 'Policies could not be loaded');
     }
     connections.configure(next.connections);
+    wallet.configure(next.wallet, next.config.apis);
     runtime = next;
     appliedAt = new Date();
     policyRunner.activate(next.policyGeneration, scripts);
@@ -204,6 +210,7 @@ const createGateway = (overrides = {}) => {
     onRenewal: applyCredentials,
     getStatus: status,
     usage: observability.usage,
+    wallet,
     onTask: (task) => runTask(task),
   });
 
@@ -341,6 +348,7 @@ const createGateway = (overrides = {}) => {
     applyConfig,
     applyCredentials,
     drainUsage: () => observability.usage.drain(),
+    drainWallet: () => wallet.drain(),
     listRequests: (query) => observability.requestLog.list(query),
     subscribeRequests: (listener) => observability.requestLog.subscribe(listener),
     series: (minutes) => observability.metrics.series.series(minutes),
@@ -413,7 +421,7 @@ const createGateway = (overrides = {}) => {
   const stop = async () => {
     await link.stop();
     await observability.offloader.drain();
-    await Promise.all([close(management), close(health), close(admin), handlers.closeAll(), policyRunner.close(), rateLimiter.close()]);
+    await Promise.all([close(management), close(health), close(admin), handlers.closeAll(), policyRunner.close(), rateLimiter.close(), wallet.close()]);
     connections.closeAll();
     logger.info('gateway stopped');
   };

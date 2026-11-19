@@ -187,6 +187,20 @@
             ],
         },
         {
+            id: 'gateway-wallet',
+            match: /^\/developer\/gateways\/[^/]+\/wallet\/?$/,
+            title: 'EU Wallet gateway',
+            steps: [
+                { target: '#get-started', title: 'Up and running in five steps', body: 'What is left before this gateway serves wallets. Each step links to the card that does it, and the card disappears once all five are done.' },
+                { target: '#identity', title: 'The client\'s certificates', body: 'The access certificate (from an Access CA), the registration certificates (from the registrar) and, for issuers, the issuer certificate. Wallets see only these: the gateway operates the service for the client. Private keys are stored encrypted.' },
+                { target: '#types', title: 'Credential types', body: 'What the gateway asks wallets for, or issues: the vct and the claims. A verifier only trusts issuers that chain to the trust anchors chosen here.' },
+                { target: '#anchors', title: 'Trust anchors', body: 'CA certificates of credential issuers (by entitlement: PID, QEAA, PuB-EAA, EAA) and of Wallet Providers.' },
+                { target: '#setup', title: 'Set up', body: 'Creates the built-in API, a published product and the provider server\'s application in one step. Its client ID and secret get a token from POST /oauth/token.' },
+                { target: '#provider', title: 'Provider server', body: 'The client\'s backend. The gateway calls it back through a connection (which can use OAuth client credentials) and signs every callback.' },
+                { target: '#records', title: 'Records', body: 'Verifications or issued credentials, with claim names but never values. Issued credentials can be suspended or revoked here.' },
+            ],
+        },
+        {
             id: 'gateway-requests',
             match: /^\/developer\/gateways\/[^/]+\/requests\/?$/,
             title: 'Live requests',

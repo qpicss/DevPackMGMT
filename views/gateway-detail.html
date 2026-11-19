@@ -51,6 +51,7 @@
                         <% } else { %>
                             <a class="badge badge-warning" href="<%= setupIncomplete ? '#setup' : '#settings' %>">Not attached to a catalog</a>
                         <% } %>
+                        <% if (gateway.kind !== 'api') { %><span class="badge badge-success"><%= gateway.kind === 'wallet-verifier' ? 'EU Wallet: verifier' : 'EU Wallet: issuer' %></span><% } %>
                         <span class="badge mono-sm"><%= gateway.publicUrl %></span>
                         <% if (gateway.autoPush) { %><span class="badge badge-success">Auto-push on</span><% } %>
                         <% if (gateway.lastPushedAt) { %><span class="badge">Last push <%= formatDate(gateway.lastPushedAt) %></span><% } %>
@@ -58,6 +59,11 @@
                 </div>
             </div>
             <div class="page-actions">
+                <% if (gateway.kind !== 'api') { %>
+                    <a class="btn btn-secondary" href="/developer/gateways/<%= gateway.id %>/wallet" data-wallet-link>
+                        <%- include('partials/icon.html', { name: 'shield-check' }) %>Wallet
+                    </a>
+                <% } %>
                 <a class="btn btn-secondary" href="/developer/gateways/<%= gateway.id %>/requests">
                     <%- include('partials/icon.html', { name: 'terminal' }) %>Live requests
                 </a>

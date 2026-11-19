@@ -1,7 +1,7 @@
 const form = document.getElementById('connectionForm');
 const connectionUrl = form.dataset.connectionUrl;
 const authType = form.querySelector('[name="authType"]');
-const SECRET_LABELS = { basic: 'Password', bearer: 'Token', header: 'Header value' };
+const SECRET_LABELS = { basic: 'Password', bearer: 'Token', header: 'Header value', oauth2: 'Client secret' };
 
 function updateAuthFields() {
     form.querySelectorAll('[data-auth]').forEach((field) => {
@@ -46,6 +46,11 @@ UI.bindForm(form, {
                     type,
                     username: formData.get('authUsername'),
                     headerName: formData.get('authHeaderName'),
+                    tokenUrl: formData.get('authTokenUrl'),
+                    clientId: formData.get('authClientId'),
+                    clientAuthMethod: formData.get('authClientAuthMethod'),
+                    scope: formData.get('authScope'),
+                    audience: formData.get('authAudience'),
                     secret: formData.get('authSecret') || undefined,
                 },
                 tls,

@@ -23,7 +23,7 @@ class LinkError extends Error {
 }
 
 class ManagementLink {
-  constructor({ settings, getCredentials, logger, onConfig, onRenewal, getStatus, usage, onTask }) {
+  constructor({ settings, getCredentials, logger, onConfig, onRenewal, getStatus, usage, wallet = null, onTask }) {
     this.settings = settings;
     this.getCredentials = getCredentials;
     this.logger = logger;
@@ -31,6 +31,7 @@ class ManagementLink {
     this.onRenewal = onRenewal;
     this.getStatus = getStatus;
     this.usage = usage;
+    this.wallet = wallet;
     this.onTask = onTask;
     this.configuredUrl = settings.managementUrl || null;
     this.pushedUrl = null;
@@ -167,11 +168,14 @@ class ManagementLink {
 
   async reportUsage() {
     const records = this.usage.drain();
-    if (!records.length) return;
+    // Wallet events (verifications, issued credentials, ...) travel with usage.
+    const wallet = this.wallet ? this.wallet.drain() : [];
+    if (!records.length && !wallet.length) return;
     try {
-      await this.request('POST', '/v1/usage', { nodeName: this.nodeName, records });
+      await this.request('POST', '/v1/usage', { nodeName: this.nodeName, records, ...(wallet.length && { wallet }) });
     } catch (error) {
       this.usage.restore(records);
+      if (wallet.length) this.wallet.restore(wallet);
       this.logger.warn('usage report failed; will retry', { error: error.message, records: records.length });
     }
   }

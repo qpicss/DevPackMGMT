@@ -90,7 +90,7 @@ A connection handler can have its own policy, chosen in **Connection handlers** 
 
 ## Connections
 
-To control how the backend is called, create a connection under **Gateways → Connections** and choose it on the API's Overview tab. It sets timeouts, retries for idempotent methods, a circuit breaker, credentials for the upstream (basic, bearer or an API key header) and TLS with your own CA or a client certificate.
+To control how the backend is called, create a connection under **Gateways → Connections** and choose it on the API's Overview tab. It sets timeouts, retries for idempotent methods, a circuit breaker, credentials for the upstream (basic, bearer, an API key header, or OAuth client credentials, where the gateway gets and renews the token itself) and TLS with your own CA or a client certificate.
 
 ## Next
 

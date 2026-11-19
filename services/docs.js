@@ -13,6 +13,16 @@ const BASE_URL = '/developer/docs';
 // overview can point each reader at their guide.
 const SECTIONS = [
   {
+    // First on purpose: the EU Digital Identity Wallet gateways are the platform's lead offer.
+    title: 'EU Digital Identity Wallet',
+    pages: [
+      { slug: 'eu-wallet', file: 'docs/eu-wallet.md', title: 'EU Wallet: verify and issue' },
+      { slug: 'tutorials/09-verify-a-diploma', file: 'docs/tutorials/09-verify-a-diploma.md', title: '9. Verify a diploma' },
+      { slug: 'tutorials/10-issue-diplomas', file: 'docs/tutorials/10-issue-diplomas.md', title: '10. Issue diplomas' },
+      { slug: 'guides/eu-wallet-gateway', file: 'docs/guides/eu-wallet-gateway.md', title: 'EU Wallet gateways: reference' },
+    ],
+  },
+  {
     title: 'Start here',
     pages: [
       { slug: '', file: 'docs/README.md', title: 'Overview' },

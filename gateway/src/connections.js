@@ -39,6 +39,7 @@ const buildAgents = (connection) => {
   return { http: new http.Agent(options), https: new https.Agent(httpsOptions) };
 };
 
+// Static credentials. OAuth client credentials ('oauth2') need a token first: see credentialHeaders().
 const authHeaders = (auth = {}) => {
   switch (auth.type) {
     case 'basic':
@@ -96,6 +97,68 @@ class UpstreamConnections {
 
   get(connectionId) {
     return this.entries.get(connectionId) || this.entries.get(DEFAULT_ID);
+  }
+
+  // The headers that authenticate a call through this connection. For 'oauth2' (client
+  // credentials) the access token is fetched from the token URL and cached until shortly before
+  // it expires; concurrent callers share one token request.
+  async credentialHeaders(entry) {
+    const auth = entry.config.auth || {};
+    if (auth.type !== 'oauth2') return authHeaders(auth);
+    if (entry.token && entry.token.until > Date.now()) return { authorization: `Bearer ${entry.token.value}` };
+    entry.tokenRequest ||= this.fetchToken(entry).finally(() => { entry.tokenRequest = null; });
+    const token = await entry.tokenRequest;
+    return { authorization: `Bearer ${token}` };
+  }
+
+  forgetToken(entry) {
+    entry.token = null;
+  }
+
+  async fetchToken(entry) {
+    const auth = entry.config.auth;
+    const form = new URLSearchParams({ grant_type: 'client_credentials' });
+    if (auth.scope) form.set('scope', auth.scope);
+    if (auth.audience) form.set('audience', auth.audience);
+    const headers = { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' };
+    if (auth.clientAuthMethod === 'client_secret_post') {
+      form.set('client_id', auth.clientId || '');
+      form.set('client_secret', auth.secret || '');
+    } else {
+      const encode = (value) => encodeURIComponent(value || '');
+      headers.authorization = `Basic ${Buffer.from(`${encode(auth.clientId)}:${encode(auth.secret)}`).toString('base64')}`;
+    }
+    const body = Buffer.from(form.toString());
+    let target;
+    try {
+      target = new URL(auth.tokenUrl);
+    } catch {
+      throw new HttpError(502, 'upstream_auth_failed', `Connection "${entry.config.name}" has no valid token URL`);
+    }
+    headers.host = target.host;
+    headers['content-length'] = String(body.length);
+    const response = await this.send(entry, { target, method: 'POST', headers, body });
+    const chunks = [];
+    let size = 0;
+    for await (const chunk of response) {
+      size += chunk.length;
+      if (size > 256 * 1024) break;
+      chunks.push(chunk);
+    }
+    let json = null;
+    try {
+      json = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    } catch {
+      json = null;
+    }
+    if (response.statusCode !== 200 || !json || typeof json.access_token !== 'string') {
+      this.logger.warn('connection token request failed', { connection: entry.config.name, status: response.statusCode });
+      throw new HttpError(502, 'upstream_auth_failed', `Connection "${entry.config.name}" could not get an access token (the token endpoint answered ${response.statusCode})`);
+    }
+    const lifetime = Number(json.expires_in) > 0 ? Number(json.expires_in) : 300;
+    // Renewed 30 seconds (or a tenth of a short lifetime) before it expires.
+    entry.token = { value: json.access_token, until: Date.now() + Math.max(1, lifetime - Math.min(30, lifetime / 10)) * 1000 };
+    return json.access_token;
   }
 
   status() {

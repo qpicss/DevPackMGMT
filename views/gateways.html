@@ -32,7 +32,7 @@
                                     <a class="app-row" href="/developer/gateways/<%= gateway.id %>">
                                         <span class="app-avatar"><%- include('partials/icon.html', { name: 'server', className: 'icon-sm' }) %></span>
                                         <span class="app-row-main">
-                                            <span class="cell-primary"><%= gateway.name %></span>
+                                            <span class="cell-primary"><%= gateway.name %><% if (gateway.kind === 'wallet-verifier') { %> <span class="badge">EU Wallet: verifier</span><% } else if (gateway.kind === 'wallet-issuer') { %> <span class="badge">EU Wallet: issuer</span><% } %></span>
                                             <% if (gateway.setup.next) { %>
                                                 <span class="cell-secondary setup-next">Step <%= gateway.setup.steps.indexOf(gateway.setup.next) + 1 %> of <%= gateway.setup.total %>: <%= gateway.setup.next.title.toLowerCase() %></span>
                                             <% } else { %>
@@ -71,6 +71,15 @@
                         <li><strong>Attach it to a catalog</strong> to serve its products</li>
                     </ol>
                     <form id="gatewayForm" class="card-body form">
+                        <div class="field">
+                            <label for="gatewayKind">Type</label>
+                            <select class="select" id="gatewayKind" name="kind" aria-describedby="gateway-kind-hint">
+                                <option value="api">API gateway: proxies your APIs to their backends</option>
+                                <option value="wallet-verifier">EU Wallet: Relying Party / Verifier (OpenID4VP)</option>
+                                <option value="wallet-issuer">EU Wallet: Attestation Provider (OpenID4VCI)</option>
+                            </select>
+                            <span id="gateway-kind-hint" class="hint">Chosen once. An EU Wallet gateway serves one client: it verifies or issues EU Digital Identity Wallet credentials with the client's own certificates, and talks to the client's provider server.</span>
+                        </div>
                         <div class="field">
                             <label for="gatewayName">Name</label>
                             <input class="input" type="text" id="gatewayName" name="name" maxlength="255" placeholder="Production EU" required>

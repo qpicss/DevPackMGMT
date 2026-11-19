@@ -6,6 +6,7 @@ const { GatewayCredential } = require('../models');
 const { getPki, issueGatewayCredentials } = require('../utils/pki');
 const { buildGatewayConfig } = require('./gatewayConfig');
 const { recordUsage } = require('./usage');
+const { recordWalletEvents } = require('./walletEvents');
 const { runTask, pollingNodes } = require('./linkTasks');
 const { MANAGEMENT_PORT } = require('./gatewayNodes');
 
@@ -217,6 +218,8 @@ const collectUsage = async (gateway) => {
     if (result.ok && result.body?.records?.length) {
       stored += await recordUsage(gateway, result.body.records);
     }
+    // Wallet gateways report verifications and issued credentials with their usage.
+    if (result.ok && result.body?.wallet?.length) await recordWalletEvents(gateway, result.body.wallet);
   }
   return stored;
 };

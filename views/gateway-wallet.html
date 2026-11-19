@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <%- include('partials/head.html', { title: `${wallet.gateway.name} · Wallet` }) %>
+</head>
+<body>
+    <%- include('partials/app-nav.html', { active: 'gateways' }) %>
+    <%
+    const g = wallet.gateway;
+    const apiUrl = `/api/org/gateways/${g.id}/wallet`;
+    const isIssuer = wallet.role === 'issuer';
+    const id = wallet.identity;
+    %>
+
+    <main id="main" class="page" data-wallet-url="<%= apiUrl %>" data-role="<%= wallet.role %>" data-public-url="<%= g.publicUrl || '' %>">
+        <nav class="breadcrumb" aria-label="Breadcrumb">
+            <a href="/developer/gateways">Gateways</a><span aria-hidden="true">/</span>
+            <a href="/developer/gateways/<%= g.id %>"><%= g.name %></a><span aria-hidden="true">/</span>
+            <span>Wallet</span>
+        </nav>
+        <div class="page-header">
+            <div>
+                <p class="page-eyebrow"><%= isIssuer ? 'EU Wallet: Attestation Provider (OpenID4VCI)' : 'EU Wallet: Relying Party / Verifier (OpenID4VP)' %></p>
+                <h1><%= g.name %></h1>
+                <p class="page-subtitle">
+                    <%= isIssuer
+                        ? "Issues the client's attestations into EU Digital Identity Wallets, signed with the client's issuer certificate. The client's provider server creates offers and supplies the claims."
+                        : "Requests and verifies credentials from EU Digital Identity Wallets with the client's own access and registration certificates, and sends the verified claims to the client's provider server." %>
+                </p>
+            </div>
+            <div class="page-actions">
+                <a class="btn btn-secondary" href="/developer/gateways/<%= g.id %>"><%- include('partials/icon.html', { name: 'server' }) %>Gateway</a>
+            </div>
+        </div>
+
+        <%
+        // Five steps from an empty gateway to a running one, the same for both roles.
+        const certificatesDone = Boolean(id.accessCertificate && id.hasAccessKey && id.registrationCertificates.length
+            && (!isIssuer || (id.issuerCertificate && id.hasIssuerKey)));
+        const providerDone = Boolean(wallet.provider.callbackUrl && wallet.provider.hasCallbackSecret);
+        const startSteps = [
+            { title: 'Certificates', done: certificatesDone, href: '#identity', link: 'Add them',
+              desc: isIssuer ? 'Access certificate and key, issuer certificate and key, registration certificate.' : 'Access certificate and key, registration certificate.' },
+            isIssuer
+                ? { title: 'Credential types', done: wallet.types.length > 0, href: '#types', link: 'Add one', desc: 'What you issue, e.g. a diploma, with its claims.' }
+                : { title: 'Trust anchors', done: wallet.anchors.length > 0, href: '#anchors', link: 'Add one', desc: 'The CAs of the issuers you accept, e.g. universities.' },
+            isIssuer
+                ? { title: 'Provider server', done: providerDone, href: '#provider', link: 'Set it', desc: 'Callback URL, claims URL and callback secret.' }
+                : { title: 'Credential types', done: wallet.types.length > 0, href: '#types', link: 'Add one', desc: 'What you ask wallets for, e.g. a diploma or the PID.' },
+            isIssuer
+                ? { title: 'Set up', done: wallet.setupDone, href: '#setup', link: 'Run it', desc: 'Built-in API, product and the provider server login.' }
+                : { title: 'Provider server', done: providerDone, href: '#provider', link: 'Set it', desc: 'Where verified claims go, and the callback secret.' },
+            isIssuer
+                ? { title: 'Run and deploy', done: Boolean(g.catalog) && !wallet.problems.length, href: `/developer/gateways/${g.id}`, link: 'Open the gateway', desc: 'A port and a node, then Set up attaches the catalog.' }
+                : { title: 'Set up and deploy', done: wallet.setupDone && Boolean(g.catalog) && !wallet.problems.length, href: wallet.setupDone ? `/developer/gateways/${g.id}` : '#setup', link: wallet.setupDone ? 'Open the gateway' : 'Run Set up', desc: 'Built-in API and login, a port and a node.' },
+        ];
+        const startRemaining = startSteps.filter((step) => !step.done).length;
+        %>
+        <% if (startRemaining) { %>
+            <section class="card setup-card" id="get-started" aria-labelledby="get-started-title">
+                <div class="card-header">
+                    <div>
+                        <h2 id="get-started-title">Up and running in five steps</h2>
+                        <p><%= startSteps.length - startRemaining %> of <%= startSteps.length %> done. <a href="/developer/docs/tutorials/<%= isIssuer ? '10-issue-diplomas' : '09-verify-a-diploma' %>">Tutorial: <%= isIssuer ? 'issue diplomas' : 'verify a diploma' %></a></p>
+                    </div>
+                </div>
+                <ol class="setup-steps">
+                    <% startSteps.forEach((step, index) => { %>
+                        <li class="setup-step <%= step.done ? 'is-done' : '' %>">
+                            <span class="step-marker"><% if (step.done) { %><%- include('partials/icon.html', { name: 'check', className: 'icon-sm' }) %><% } else { %><%= index + 1 %><% } %></span>
+                            <div>
+                                <div class="step-title"><%= step.title %></div>
+                                <div class="step-desc"><%= step.desc %> <% if (!step.done) { %><a href="<%= step.href %>"><%= step.link %></a><% } %></div>
+                            </div>
+                        </li>
+                    <% }) %>
+                </ol>
+            </section>
+        <% } %>
+
+        <% if (wallet.problemDetails.length) { %>
+            <section class="card" id="problems">
+                <div class="card-header"><div><h2>Before it can be deployed</h2><p>These block a push to the gateway.</p></div></div>
+                <ul class="card-body problem-list">
+                    <% wallet.problemDetails.forEach((problem) => { %>
+                        <li><%- include('partials/icon.html', { name: 'alert', className: 'icon-sm' }) %> <%= problem.message %><% if (problem.href) { %> <a href="<%= problem.href %>"><%= problem.label %></a><% } %></li>
+                    <% }) %>
+                </ul>
+            </section>
+        <% } %>
+
+        <div class="grid-2">
+            <div class="stack">
+                <section class="card" id="identity">
+                    <div class="card-header">
+                        <div>
+                            <h2>Identity and certificates</h2>
+                            <p>The client brings these. Every signature a wallet sees uses them; the gateway only operates the service.</p>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <dl class="detail-list detail-list-compact">
+                            <div><dt>Client ID</dt><dd><code><%= wallet.settings.clientIdScheme %>:…</code></dd></div>
+                            <div>
+                                <dt>Access certificate</dt>
+                                <dd>
+                                    <% if (id.accessCertificate) { %>
+                                        <span><%= id.accessCertificate.subject %></span><br>
+                                        <span class="muted"><%= id.accessCertificate.subjectAltName || 'No subject alternative names' %> · until <%= formatDate(id.accessCertificate.validTo) %><%= id.accessCertificate.daysLeft <= 30 ? ` (${id.accessCertificate.daysLeft} days left)` : '' %> · key <%= id.hasAccessKey ? 'stored encrypted' : 'missing' %></span>
+                                    <% } else { %><span class="badge badge-warning">Not uploaded</span><% } %>
+                                </dd>
+                            </div>
+                            <% if (isIssuer) { %>
+                                <div>
+                                    <dt>Issuer certificate</dt>
+                                    <dd>
+                                        <% if (id.issuerCertificate) { %>
+                                            <span><%= id.issuerCertificate.subject %></span><br>
+                                            <span class="muted">until <%= formatDate(id.issuerCertificate.validTo) %> · key <%= id.hasIssuerKey ? 'stored encrypted' : 'missing' %></span>
+                                        <% } else { %><span class="badge badge-warning">Not uploaded</span><% } %>
+                                    </dd>
+                                </div>
+                            <% } %>
+                            <div>
+                                <dt>Registration certificates</dt>
+                                <dd>
+                                    <% if (!id.registrationCertificates.length) { %><span class="badge badge-warning">None</span><% } %>
+                                    <ul class="plain-list">
+                                        <% id.registrationCertificates.forEach((item) => { %>
+                                            <li>
+                                                <%= item.subject || 'Registration certificate' %><% if (item.expiresAt) { %> <span class="muted">until <%= formatDate(item.expiresAt) %></span><% } %>
+                                                <button type="button" class="btn btn-danger-ghost btn-sm" data-action="<%= apiUrl %>/registration-certificates/<%= item.id %>" data-method="DELETE"
+                                                    data-confirm-title="Remove this registration certificate?" data-confirm-label="Remove" data-danger data-success="Registration certificate removed">Remove</button>
+                                            </li>
+                                        <% }) %>
+                                    </ul>
+                                </dd>
+                            </div>
+                        </dl>
+                    </div>
+                    <form id="identityForm" class="card-body form">
+                        <div class="field">
+                            <label for="legalName">Legal name</label>
+                            <input class="input" type="text" id="legalName" name="legalName" maxlength="255" value="<%= id.legalName %>">
+                        </div>
+                        <% if (isIssuer) { %>
+                            <div class="field">
+                                <label for="displayName">Name shown in wallets</label>
+                                <input class="input" type="text" id="displayName" name="displayName" maxlength="255" value="<%= id.displayName %>">
+                            </div>
+                            <div class="field">
+                                <label for="legalCategory">Legal category</label>
+                                <select class="select" id="legalCategory" name="legalCategory">
+                                    <% wallet.options.legalCategories.forEach((category) => { %>
+                                        <option value="<%= category %>" <%= id.legalCategory === category ? 'selected' : '' %>><%= category %></option>
+                                    <% }) %>
+                                </select>
+                                <span class="hint">QEAA (qualified, issued by a QTSP) and PuB-EAA issuers sign with a key in their HSM; this version holds software keys, so it serves EAA issuers.</span>
+                            </div>
+                        <% } %>
+                        <div class="field">
+                            <label for="accessCertificatePem">Access certificate chain (PEM, leaf first)</label>
+                            <textarea class="input mono" id="accessCertificatePem" name="accessCertificatePem" rows="3" placeholder="-----BEGIN CERTIFICATE-----"></textarea>
+                        </div>
+                        <div class="field">
+                            <label for="accessKeyPem">Access certificate private key (PEM)</label>
+                            <textarea class="input mono" id="accessKeyPem" name="accessKeyPem" rows="3" placeholder="-----BEGIN PRIVATE KEY-----" autocomplete="off"></textarea>
+                            <span class="hint">Stored encrypted and sent only to this gateway's nodes. HSM and cloud KMS keys come in a later version.</span>
+                        </div>
+                        <% if (isIssuer) { %>
+                            <div class="field">
+                                <label for="issuerCertificatePem">Issuer certificate chain (PEM, leaf first)</label>
+                                <textarea class="input mono" id="issuerCertificatePem" name="issuerCertificatePem" rows="3" placeholder="-----BEGIN CERTIFICATE-----"></textarea>
+                            </div>
+                            <div class="field">
+                                <label for="issuerKeyPem">Issuer private key (PEM)</label>
+                                <textarea class="input mono" id="issuerKeyPem" name="issuerKeyPem" rows="3" placeholder="-----BEGIN PRIVATE KEY-----" autocomplete="off"></textarea>
+                            </div>
+                        <% } %>
+                        <div class="field">
+                            <label for="registrationCertificate">Add a registration certificate (JWT from your registrar)</label>
+                            <textarea class="input mono" id="registrationCertificate" name="registrationCertificate" rows="2" placeholder="eyJ…"></textarea>
+                        </div>
+                        <div id="identity-alert" class="alert alert-danger" role="alert" hidden>
+                            <%- include('partials/icon.html', { name: 'alert' }) %><span data-alert-text></span>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary"><%- include('partials/icon.html', { name: 'upload' }) %>Save</button>
+                        </div>
+                    </form>
+                </section>
+
+                <section class="card" id="types">
+                    <div class="card-header">
+                        <div>
+                            <h2>Credential types</h2>
+                            <p><%= isIssuer ? 'What this gateway issues (SD-JWT VC). The identifier is the credential_configuration_id wallets see.' : 'What this gateway asks wallets for (SD-JWT VC). Ask only for claims your registration certificate covers.' %></p>
+                        </div>
+                    </div>
+                    <% if (wallet.types.length) { %>
+                        <ul class="app-list">
+                            <% wallet.types.forEach((type) => { %>
+                                <li class="app-row">
+                                    <span class="app-row-main">
+                                        <span class="cell-primary"><%= type.name %> <code><%= type.key %></code></span>
+                                        <span class="cell-secondary mono-sm"><%= type.vct %></span>
+                                        <span class="cell-secondary">Claims: <%= type.claims.map((claim) => claim.path.join('.') + (claim.required ? '' : ' (optional)')).join(', ') %></span>
+                                        <% if (!isIssuer) { %>
+                                            <span class="cell-secondary">Trusted issuers: <%= type.anchorIds.map((anchorId) => (wallet.anchors.find((anchor) => anchor.id === anchorId) || {}).name).filter(Boolean).join(', ') || 'none' %></span>
+                                        <% } else { %>
+                                            <span class="cell-secondary">Valid for <%= type.validityDays %> days</span>
+                                        <% } %>
+                                    </span>
+                                    <button type="button" class="btn btn-danger-ghost btn-sm btn-icon" data-action="<%= apiUrl %>/types/<%= type.id %>" data-method="DELETE"
+                                        data-confirm-title="Remove <%= type.name %>?" data-confirm-message="Callers can no longer use <%= type.key %> after the next push." data-confirm-label="Remove" data-danger
+                                        data-success="<%= type.name %> was removed" aria-label="Remove <%= type.name %>" title="Remove">
+                                        <%- include('partials/icon.html', { name: 'trash' }) %>
+                                    </button>
+                                </li>
+                            <% }) %>
+                        </ul>
+                    <% } %>
+                    <form id="typeForm" class="card-body form">
+                        <div class="field preset-row">
+                            <button type="button" class="btn btn-secondary btn-sm" data-diploma-preset>Fill in a diploma (example)</button>
+                            <% if (!isIssuer) { %>
+                                <button type="button" class="btn btn-secondary btn-sm" data-pid-preset>Fill in the EU PID (urn:eudi:pid:1)</button>
+                            <% } %>
+                        </div>
+                        <div class="field">
+                            <label for="typeKey">Identifier</label>
+                            <input class="input mono" type="text" id="typeKey" name="key" maxlength="64" placeholder="<%= isIssuer ? 'employee_badge' : 'diploma' %>" required>
+                        </div>
+                        <div class="field">
+                            <label for="typeName">Name</label>
+                            <input class="input" type="text" id="typeName" name="name" maxlength="255" required>
+                        </div>
+                        <div class="field">
+                            <label for="typeVct">vct</label>
+                            <input class="input mono" type="text" id="typeVct" name="vct" maxlength="500" placeholder="https://credentials.example.com/diploma" required>
+                        </div>
+                        <div class="field">
+                            <label for="typeClaims">Claims, one per line</label>
+                            <textarea class="input mono" id="typeClaims" name="claims" rows="4" placeholder="given_name&#10;family_name&#10;address.locality?" required></textarea>
+                            <span class="hint">Dotted paths for nested claims. End a line with ? for an optional claim.</span>
+                        </div>
+                        <% if (isIssuer) { %>
+                            <div class="field">
+                                <label for="typeValidity">Valid for (days)</label>
+                                <input class="input input-sm" type="number" id="typeValidity" name="validityDays" min="1" max="3650" value="365">
+                            </div>
+                        <% } else { %>
+                            <fieldset class="field">
+                                <legend>Trusted issuers (trust anchors)</legend>
+                                <% if (!wallet.anchors.length) { %><span class="hint">Add a trust anchor first.</span><% } %>
+                                <% wallet.anchors.forEach((anchor) => { %>
+                                    <label class="check-row"><input type="checkbox" name="anchorIds" value="<%= anchor.id %>"> <%= anchor.name %> <span class="muted">(<%= anchor.entitlement %>)</span></label>
+                                <% }) %>
+                            </fieldset>
+                        <% } %>
+                        <div id="type-alert" class="alert alert-danger" role="alert" hidden>
+                            <%- include('partials/icon.html', { name: 'alert' }) %><span data-alert-text></span>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary"><%- include('partials/icon.html', { name: 'plus' }) %>Add credential type</button>
+                        </div>
+                    </form>
+                </section>
+
+                <section class="card" id="anchors">
+                    <div class="card-header">
+                        <div>
+                            <h2>Trust anchors</h2>
+                            <p><%= isIssuer ? 'Wallet Provider anchors, to check wallet attestations when you require them.' : 'CA certificates the issuers of accepted credentials chain to (from the EU trusted lists, or the scheme of a non-qualified attestation), and Wallet Provider anchors.' %></p>
+                        </div>
+                    </div>
+                    <% if (wallet.anchors.length) { %>
+                        <ul class="app-list">
+                            <% wallet.anchors.forEach((anchor) => { %>
+                                <li class="app-row">
+                                    <span class="app-row-main">
+                                        <span class="cell-primary"><%= anchor.name %> <span class="badge"><%= anchor.entitlement %></span></span>
+                                        <% anchor.certificates.filter(Boolean).forEach((cert) => { %>
+                                            <span class="cell-secondary"><%= cert.subject %> · until <%= formatDate(cert.validTo) %></span>
+                                        <% }) %>
+                                    </span>
+                                    <button type="button" class="btn btn-danger-ghost btn-sm btn-icon" data-action="<%= apiUrl %>/anchors/<%= anchor.id %>" data-method="DELETE"
+                                        data-confirm-title="Remove <%= anchor.name %>?" data-confirm-label="Remove" data-danger data-success="<%= anchor.name %> was removed"
+                                        aria-label="Remove <%= anchor.name %>" title="Remove">
+                                        <%- include('partials/icon.html', { name: 'trash' }) %>
+                                    </button>
+                                </li>
+                            <% }) %>
+                        </ul>
+                    <% } %>
+                    <form id="anchorForm" class="card-body form">
+                        <div class="field">
+                            <label for="anchorName">Name</label>
+                            <input class="input" type="text" id="anchorName" name="name" maxlength="255" placeholder="Romanian PID provider CA" required>
+                        </div>
+                        <div class="field">
+                            <label for="anchorEntitlement">Entitlement</label>
+                            <select class="select" id="anchorEntitlement" name="entitlement">
+                                <% wallet.options.entitlements.forEach((entitlement) => { %>
+                                    <option value="<%= entitlement %>"><%= entitlement === 'WalletProvider' ? 'Wallet Provider' : entitlement %></option>
+                                <% }) %>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="anchorPem">CA certificates (PEM)</label>
+                            <textarea class="input mono" id="anchorPem" name="certificatesPem" rows="3" placeholder="-----BEGIN CERTIFICATE-----" required></textarea>
+                        </div>
+                        <div id="anchor-alert" class="alert alert-danger" role="alert" hidden>
+                            <%- include('partials/icon.html', { name: 'alert' }) %><span data-alert-text></span>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary"><%- include('partials/icon.html', { name: 'plus' }) %>Add trust anchor</button>
+                        </div>
+                    </form>
+                </section>
+            </div>
+
+            <div class="stack">
+                <section class="card" id="setup">
+                    <div class="card-header">
+                        <div>
+                            <h2>Set up the <%= wallet.builtin.name %> API</h2>
+                            <p>Creates <%= g.catalog ? `in ${g.catalog.name}` : 'a catalog with' %> the built-in API (<code><%= wallet.builtin.basePath %></code>), a published product and the provider server's application with an approved subscription. Safe to run again.</p>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <button type="button" class="btn btn-primary" data-wallet-setup><%- include('partials/icon.html', { name: 'play' }) %>Set up</button>
+                        <div id="setup-result" class="stack-sm" hidden aria-live="polite"></div>
+                    </div>
+                </section>
+
+                <section class="card" id="provider">
+                    <div class="card-header">
+                        <div>
+                            <h2>Provider server</h2>
+                            <p>The client's backend. It calls the gateway with OAuth client credentials (POST /oauth/token); the gateway calls it back through a connection, which can use OAuth client credentials too.</p>
+                        </div>
+                    </div>
+                    <form id="providerForm" class="card-body form">
+                        <div class="field">
+                            <label for="providerConnection">Connection</label>
+                            <select class="select" id="providerConnection" name="connectionId">
+                                <option value="">Default (no credentials)</option>
+                                <% wallet.connections.forEach((connection) => { %>
+                                    <option value="<%= connection.id %>" <%= wallet.provider.connectionId === connection.id ? 'selected' : '' %>><%= connection.name %></option>
+                                <% }) %>
+                            </select>
+                            <span class="hint">Timeouts, mTLS and authentication for calls to the provider server. Choose <a href="/developer/connections">OAuth 2.0 client credentials</a> on the connection to have the gateway fetch a token.</span>
+                        </div>
+                        <div class="field">
+                            <label for="callbackUrl">Callback URL</label>
+                            <input class="input mono" type="url" id="callbackUrl" name="callbackUrl" value="<%= wallet.provider.callbackUrl || '' %>" placeholder="https://provider.example.com/wallet/events">
+                            <span class="hint">Receives <%= isIssuer ? 'offer and issuance events' : 'the verified claims' %> as JSON, signed in X-Wallet-Signature (HMAC-SHA256 of "t.body" with the callback secret). Retried after 5 s, 30 s, 2 min, 10 min and 1 h.</span>
+                        </div>
+                        <% if (isIssuer) { %>
+                            <div class="field">
+                                <label for="claimsUrl">Claims URL</label>
+                                <input class="input mono" type="url" id="claimsUrl" name="claimsUrl" value="<%= wallet.provider.claimsUrl || '' %>" placeholder="https://provider.example.com/wallet/claims">
+                                <span class="hint">The gateway POSTs { subject, credentialType, offerId } when a wallet redeems an offer and expects { claims }. Leave empty if your offers carry the claims.</span>
+                            </div>
+                        <% } %>
+                        <div id="provider-alert" class="alert alert-danger" role="alert" hidden>
+                            <%- include('partials/icon.html', { name: 'alert' }) %><span data-alert-text></span>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">Save</button>
+                            <button type="button" class="btn btn-secondary" data-callback-secret><%- include('partials/icon.html', { name: 'key' }) %><%= wallet.provider.hasCallbackSecret ? 'New callback secret' : 'Create callback secret' %></button>
+                        </div>
+                        <div id="secret-result" class="alert alert-info" hidden aria-live="polite"></div>
+                    </form>
+                </section>
+
+                <section class="card" id="settings">
+                    <div class="card-header"><div><h2>Settings</h2></div></div>
+                    <form id="settingsForm" class="card-body form">
+                        <% if (!isIssuer) { %>
+                            <div class="field">
+                                <label for="clientIdScheme">Client ID</label>
+                                <select class="select" id="clientIdScheme" name="clientIdScheme">
+                                    <option value="x509_san_dns" <%= wallet.settings.clientIdScheme === 'x509_san_dns' ? 'selected' : '' %>>x509_san_dns (the access certificate names the public host)</option>
+                                    <option value="x509_hash" <%= wallet.settings.clientIdScheme === 'x509_hash' ? 'selected' : '' %>>x509_hash (hash of the access certificate)</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="responseMode">Response mode</label>
+                                <select class="select" id="responseMode" name="responseMode">
+                                    <option value="direct_post.jwt" <%= wallet.settings.responseMode === 'direct_post.jwt' ? 'selected' : '' %>>direct_post.jwt (encrypted, recommended)</option>
+                                    <option value="direct_post" <%= wallet.settings.responseMode === 'direct_post' ? 'selected' : '' %>>direct_post (not encrypted)</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="sessionSeconds">Session time (seconds)</label>
+                                <input class="input input-sm" type="number" id="sessionSeconds" name="sessionSeconds" min="30" max="3600" value="<%= wallet.settings.sessionSeconds %>">
+                            </div>
+                            <div class="field">
+                                <label for="resultRetentionHours">Keep undelivered results (hours)</label>
+                                <input class="input input-sm" type="number" id="resultRetentionHours" name="resultRetentionHours" min="1" max="168" value="<%= wallet.settings.resultRetentionHours %>">
+                                <span class="hint">Claims are deleted from the gateway as soon as the provider server has them.</span>
+                            </div>
+                            <div class="field">
+                                <label for="verifierInfoFormat">verifier_info format of the registration certificate</label>
+                                <input class="input input-sm mono" type="text" id="verifierInfoFormat" name="verifierInfoFormat" maxlength="100" value="<%= wallet.settings.verifierInfoFormat %>">
+                            </div>
+                        <% } else { %>
+                            <div class="field">
+                                <label for="offerTtlSeconds">Offers expire after (seconds)</label>
+                                <input class="input input-sm" type="number" id="offerTtlSeconds" name="offerTtlSeconds" min="60" max="2592000" value="<%= wallet.settings.offerTtlSeconds %>">
+                            </div>
+                            <div class="field">
+                                <label for="batchSize">Credentials per request (batch)</label>
+                                <input class="input input-sm" type="number" id="batchSize" name="batchSize" min="1" max="50" value="<%= wallet.settings.batchSize %>">
+                            </div>
+                            <label class="switch-row" for="requireWalletAttestation">
+                                <input class="switch" type="checkbox" id="requireWalletAttestation" name="requireWalletAttestation" <%= wallet.settings.requireWalletAttestation ? 'checked' : '' %>>
+                                <span>Require a wallet attestation from a trusted Wallet Provider</span>
+                            </label>
+                            <fieldset class="field">
+                                <legend>Wallet Provider anchors</legend>
+                                <% const providers = wallet.anchors.filter((anchor) => anchor.entitlement === 'WalletProvider'); %>
+                                <% if (!providers.length) { %><span class="hint">Add a trust anchor with the Wallet Provider entitlement.</span><% } %>
+                                <% providers.forEach((anchor) => { %>
+                                    <label class="check-row"><input type="checkbox" name="walletProviderAnchorIds" value="<%= anchor.id %>" <%= wallet.walletProviderAnchorIds.includes(anchor.id) ? 'checked' : '' %>> <%= anchor.name %></label>
+                                <% }) %>
+                            </fieldset>
+                        <% } %>
+                        <div id="settings-alert" class="alert alert-danger" role="alert" hidden>
+                            <%- include('partials/icon.html', { name: 'alert' }) %><span data-alert-text></span>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">Save settings</button>
+                        </div>
+                    </form>
+                </section>
+
+                <section class="card" id="records">
+                    <div class="card-header">
+                        <div>
+                            <h2><%= isIssuer ? 'Issued credentials' : 'Verifications' %></h2>
+                            <p>Metadata only: claim names, never values. Reported by the nodes with their usage.</p>
+                        </div>
+                        <button type="button" class="btn btn-secondary btn-sm" data-records-refresh><%- include('partials/icon.html', { name: 'refresh' }) %>Refresh</button>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <% if (isIssuer) { %>
+                                        <th>Credential</th><th>Type</th><th>Subject</th><th>Status</th><th>Issued</th><th><span class="sr-only">Actions</span></th>
+                                    <% } else { %>
+                                        <th>Started</th><th>Type</th><th>Status</th><th>Issuer</th><th>Claims</th><th>Callback</th>
+                                    <% } %>
+                                </tr>
+                            </thead>
+                            <tbody data-records><tr><td colspan="6" class="muted">Loading…</td></tr></tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <script src="/js/ui.js"></script>
+    <script src="/js/gateway-wallet.js"></script>
+</body>
+</html>

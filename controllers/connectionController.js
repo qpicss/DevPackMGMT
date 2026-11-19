@@ -4,7 +4,9 @@ const { Api, Connection } = require('../models');
 const { sendServerError } = require('../utils/http');
 const { seal } = require('../utils/secretBox');
 
-const AUTH_TYPES = ['none', 'basic', 'bearer', 'header'];
+// 'oauth2': OAuth 2.0 client credentials (the gateway gets a token from tokenUrl). Matches gateway/src/runtime.js.
+const AUTH_TYPES = ['none', 'basic', 'bearer', 'header', 'oauth2'];
+const CLIENT_AUTH_METHODS = ['client_secret_basic', 'client_secret_post'];
 const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,100}$/;
 
 const certificateInfo = (pem) => {
@@ -26,7 +28,19 @@ const serializeConnection = (connection) => {
     retries: settings.retries,
     retryOn: settings.retryOn,
     circuitBreaker: settings.circuitBreaker,
-    auth: { type: settings.auth.type, username: settings.auth.username, headerName: settings.auth.headerName, hasSecret: Boolean(connection.authSecretSealed) },
+    auth: {
+      type: settings.auth.type,
+      username: settings.auth.username,
+      headerName: settings.auth.headerName,
+      ...(settings.auth.type === 'oauth2' && {
+        tokenUrl: settings.auth.tokenUrl,
+        clientId: settings.auth.clientId,
+        clientAuthMethod: settings.auth.clientAuthMethod || 'client_secret_basic',
+        scope: settings.auth.scope || null,
+        audience: settings.auth.audience || null,
+      }),
+      hasSecret: Boolean(connection.authSecretSealed),
+    },
     tls: {
       rejectUnauthorized: settings.tls.rejectUnauthorized,
       serverName: settings.tls.serverName,
@@ -75,7 +89,7 @@ const applyInput = (body, current, { create = false } = {}) => {
   }
   if (body.auth !== undefined) {
     const auth = body.auth || {};
-    if (!AUTH_TYPES.includes(auth.type)) throw new Error('Authentication must be none, basic, bearer or header');
+    if (!AUTH_TYPES.includes(auth.type)) throw new Error('Authentication must be none, basic, bearer, header or oauth2');
     settings.auth = { type: auth.type, username: null, headerName: null };
     if (auth.type === 'basic') {
       if (typeof auth.username !== 'string' || !auth.username.trim()) throw new Error('Basic authentication needs a username');
@@ -84,6 +98,31 @@ const applyInput = (body, current, { create = false } = {}) => {
     if (auth.type === 'header') {
       if (!HEADER_NAME.test(String(auth.headerName || ''))) throw new Error('Enter a valid header name, e.g. x-api-key');
       settings.auth.headerName = auth.headerName.trim().toLowerCase();
+    }
+    if (auth.type === 'oauth2') {
+      let tokenUrl = null;
+      try {
+        tokenUrl = new URL(String(auth.tokenUrl || '').trim());
+      } catch {
+        tokenUrl = null;
+      }
+      if (!tokenUrl || !['http:', 'https:'].includes(tokenUrl.protocol)) throw new Error('Enter the token URL of the OAuth server, e.g. https://auth.example.com/oauth/token');
+      if (tokenUrl.protocol === 'http:' && !['localhost', '127.0.0.1'].includes(tokenUrl.hostname)) throw new Error('The token URL must use https');
+      const clientId = typeof auth.clientId === 'string' ? auth.clientId.trim() : '';
+      if (!clientId || clientId.length > 255) throw new Error('Enter the client ID the gateway uses');
+      const optional = (value, label) => {
+        const text = typeof value === 'string' ? value.trim() : '';
+        if (text.length > 500 || /[\r\n]/.test(text)) throw new Error(`${label} must be a single line of at most 500 characters`);
+        return text || null;
+      };
+      settings.auth = {
+        ...settings.auth,
+        tokenUrl: tokenUrl.href,
+        clientId,
+        clientAuthMethod: CLIENT_AUTH_METHODS.includes(auth.clientAuthMethod) ? auth.clientAuthMethod : 'client_secret_basic',
+        scope: optional(auth.scope, 'The scope'),
+        audience: optional(auth.audience, 'The audience'),
+      };
     }
     if (auth.type === 'none') {
       secrets.authSecretSealed = null;

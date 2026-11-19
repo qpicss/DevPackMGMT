@@ -7,6 +7,7 @@ const apis = require('../controllers/apiController');
 const products = require('../controllers/productController');
 const policies = require('../controllers/policyController');
 const deployment = require('../controllers/deploymentController');
+const wallet = require('../controllers/walletController');
 const connections = require('../controllers/connectionController');
 const dictionary = require('../controllers/dictionaryController');
 const design = require('../controllers/apiDesignController');
@@ -134,5 +135,19 @@ router.get('/gateways/:id/credentials', requireOrgAdmin, deployment.downloadCred
 router.get('/gateways/:id/config', requireOrgAdmin, deployment.previewConfig);
 router.post('/gateways/:id/push', requireOrgAdmin, deployment.push);
 router.get('/gateways/:id/status', requireOrgAdmin, deployment.status);
+// EU Wallet gateways: the client's certificates, settings, trust anchors, credential types, setup and records
+router.get('/gateways/:id/wallet', requireOrgAdmin, wallet.getWallet);
+router.put('/gateways/:id/wallet/identity', requireOrgAdmin, wallet.updateIdentity);
+router.delete('/gateways/:id/wallet/registration-certificates/:registrationId', requireOrgAdmin, wallet.removeRegistration);
+router.put('/gateways/:id/wallet/settings', requireOrgAdmin, wallet.updateSettings);
+router.post('/gateways/:id/wallet/callback-secret', requireOrgAdmin, wallet.rotateCallbackSecret);
+router.post('/gateways/:id/wallet/anchors', requireOrgAdmin, wallet.createAnchor);
+router.delete('/gateways/:id/wallet/anchors/:anchorId', requireOrgAdmin, wallet.deleteAnchor);
+router.post('/gateways/:id/wallet/types', requireOrgAdmin, wallet.createType);
+router.put('/gateways/:id/wallet/types/:typeId', requireOrgAdmin, wallet.updateType);
+router.delete('/gateways/:id/wallet/types/:typeId', requireOrgAdmin, wallet.deleteType);
+router.post('/gateways/:id/wallet/setup', requireOrgAdmin, wallet.setup);
+router.get('/gateways/:id/wallet/records', requireOrgAdmin, wallet.listRecords);
+router.post('/gateways/:id/wallet/credentials/:credentialId/:action', requireOrgAdmin, wallet.changeCredentialStatus);
 
 module.exports = router;

@@ -36,7 +36,7 @@ The runtime that serves API traffic for OAuth Server. It is a separate Node.js 2
   - connect and response timeouts;
   - retries for idempotent methods, with backoff;
   - a circuit breaker;
-  - upstream credentials (basic, bearer or an API key header);
+  - upstream credentials (basic, bearer, an API key header, or OAuth 2.0 client credentials: the gateway gets a token from the token URL and renews it before it expires);
   - TLS: your own CA, a client certificate for mTLS, and the server name.
 - **Requests.** Calls go to `<handler>/<API base path>/<OpenAPI path>`. The path must match an operation in the API's OpenAPI document. A path parameter written `{name+}` (for example `/{path+}`) matches the rest of the path, slashes included; such operations are tried after the others.
 - **Authentication.** Callers send `Authorization: Bearer <token>`, with a token from the console's `POST /oauth/token` (client credentials). The gateway verifies the token with the public key it was given, so it never calls the console per request. An API whose access is **public** needs no token: the gateway skips the token, subscription and product rate limit, and its flows see no consumer. A single operation can be public in the same way (`access: "public"` on the operation in the configuration), while the API's other operations still need a token.
@@ -267,6 +267,34 @@ Three flow steps check requests without any code. Each answers the client itself
 - **Security.** Blocks (or, in monitor mode, only logs) SQL, script (XSS), path traversal, command and NoSQL injection in the path, query, headers and body, after URL, double URL and HTML entity decoding. It also limits the body size and the depth and size of JSON, allows or denies client addresses (IPv4 and IPv6 ranges), and locks out a client address, application, header value or body field after repeated failed answers (brute force). Each node counts failures on its own. Findings name the rule and the place, never the value.
 
 The console resolves the OpenAPI `$ref`s and sends each operation's parameters and request body (`operations[].contract`) only for APIs whose policy, or a port policy, has a Validate step.
+
+## EU Wallet roles
+
+A gateway created in the console as an **EU Wallet** gateway gets configuration schema 3 with a `wallet` section. It runs in one of two roles:
+
+- a Relying Party / Verifier (OpenID4VP);
+- an Attestation Provider (OpenID4VCI).
+
+Its built-in API (`/wallet/verify` or `/wallet/issue`) is answered by the gateway itself (`src/wallet/`), after the port's flow; it has no policy flow of its own.
+
+The wallet code covers:
+
+- SD-JWT VC;
+- JWS and JWE (ECDH-ES);
+- x5c chains;
+- Token Status Lists;
+- DPoP;
+- wallet attestations.
+
+All of it uses `node:crypto` only.
+
+On the node:
+
+- **Sessions, offers and nonces** live in Redis when `REDIS_URL` is set, otherwise in memory. A cluster needs Redis.
+- **Issuer nodes** keep their next status-list index in `wallet-status.json` in the data directory. `GATEWAY_NODE_NAME` must match the node's name in the console, which assigns each node its own block of indexes.
+- **Verifications, offers and issued credentials** go to the console with the usage reports, as metadata only.
+
+See [EU Wallet gateways](../docs/guides/eu-wallet-gateway.md).
 
 ## Responses from the gateway
 

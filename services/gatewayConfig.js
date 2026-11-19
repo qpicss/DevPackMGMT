@@ -12,9 +12,13 @@ const { AUDIENCE, issuer } = require('../utils/gatewayTokens');
 const { linkSettings } = require('../utils/linkSettings');
 const { operationContract } = require('../utils/openapiContract');
 const { defaultFlow, flowProblems, usesBackend, usesContract, connectionIdsOf } = require('../gateway/src/flow');
+const { builtinOf, KIND_BUILTIN } = require('../utils/walletBuiltins');
+const { isWallet, buildWalletSection, redactWallet } = require('./walletConfig');
 
-// 2: policies are flows (gateway/src/flow.js). Matches gateway/src/runtime.js.
+// 2: policies are flows (gateway/src/flow.js). 3: an EU Wallet gateway with a `wallet` section.
+// Matches gateway/src/runtime.js. API gateways stay at 2, so their configurations and hashes don't change.
 const SCHEMA = 2;
+const WALLET_SCHEMA = 3;
 const REDACTED = '[stored encrypted, sent only to the gateway]';
 
 const isAbsoluteHttpUrl = (value) => {
@@ -66,6 +70,14 @@ const connectionConfig = (connection) => {
       type: settings.auth.type,
       ...(settings.auth.username && { username: settings.auth.username }),
       ...(settings.auth.headerName && { headerName: settings.auth.headerName }),
+      // OAuth 2.0 client credentials: the gateway gets a token from tokenUrl before calling.
+      ...(settings.auth.type === 'oauth2' && {
+        tokenUrl: settings.auth.tokenUrl,
+        clientId: settings.auth.clientId,
+        clientAuthMethod: settings.auth.clientAuthMethod || 'client_secret_basic',
+        ...(settings.auth.scope && { scope: settings.auth.scope }),
+        ...(settings.auth.audience && { audience: settings.auth.audience }),
+      }),
       ...(settings.auth.type !== 'none' && connection.authSecretSealed && { secret: open(connection.authSecretSealed) }),
     },
     tls: {
@@ -121,9 +133,12 @@ const buildGatewayConfig = async (gateway) => {
   }
 
   // Connections of the APIs and of every Invoke step in the flows this gateway runs.
+  const walletProviderConnection = isWallet(gateway) ? gateway.walletSettings?.provider?.connectionId : null;
   const flowConnectionIds = new Set([
     ...[...apis.values()].flatMap((api) => (api.policy ? connectionIdsOf(api.policy.flow) : [])),
     ...(gateway.handlers || []).flatMap((handler) => (handler.policy ? connectionIdsOf(handler.policy.flow) : [])),
+    // A wallet gateway calls its client's provider server through a connection.
+    ...(walletProviderConnection ? [walletProviderConnection] : []),
   ]);
   const flowConnections = flowConnectionIds.size
     ? await Connection.findAll({ where: { id: [...flowConnectionIds], organizationId: gateway.organizationId } })
@@ -154,6 +169,11 @@ const buildGatewayConfig = async (gateway) => {
       basePaths.set(api.basePath, api.name);
     }
     const flow = apiFlowConfig(api);
+    // Built-in wallet APIs are answered by the gateway itself, on a wallet gateway of the same kind.
+    const builtin = builtinOf(api.spec);
+    if (builtin && KIND_BUILTIN[gateway.kind] !== builtin) {
+      addProblem(`API "${api.name}" is a built-in ${builtin === 'wallet-verifier' ? 'verification' : 'issuance'} API: only a wallet gateway of that kind can serve it. Remove it from this catalog's products.`, { href: `/developer/apis/${api.id}`, label: `Open ${api.name}` });
+    }
     if (api.policy && !checked.has(api.policy.id)) {
       checked.add(api.policy.id);
       checkFlow(api.policy, `used by ${api.name}`);
@@ -171,6 +191,7 @@ const buildGatewayConfig = async (gateway) => {
       basePath: api.basePath,
       // Only public APIs say so, so other configurations (and their hashes) stay the same.
       ...(api.access === 'public' && { access: 'public' }),
+      ...(builtin && { builtin }),
       upstreamUrl: isAbsoluteHttpUrl(api.baseUrl) ? api.baseUrl : null,
       connectionId: api.connection ? api.connection.id : null,
       operations: listOperations(api.spec).map(({ method, path, public: isPublic }) => ({
@@ -224,14 +245,21 @@ const buildGatewayConfig = async (gateway) => {
     .map((entry) => ({ ...entry, productIds: entry.productIds.sort() }))
     .sort(byKey('clientId'));
 
+  // Wallet gateways: the client's certificates, keys, credential types, anchors and provider server.
+  const wallet = await buildWalletSection(gateway, { addProblem, connections });
+  if (wallet && gateway.catalogId && !apiConfigs.some((api) => api.builtin === KIND_BUILTIN[gateway.kind])) {
+    addProblem(`No published product of this catalog has the built-in ${wallet.role === 'verifier' ? 'Credential verification' : 'Credential issuance'} API.`, { href: `/developer/gateways/${gateway.id}/wallet#setup`, label: 'Set up the wallet APIs' });
+  }
+
   const link = linkSettings();
   const core = {
-    schema: SCHEMA,
+    schema: wallet ? WALLET_SCHEMA : SCHEMA,
     gateway: {
       id: gateway.id,
       name: gateway.name,
       publicUrl: gateway.publicUrl,
       nodeCount: Math.max(1, (gateway.nodes || []).length),
+      ...(wallet && { kind: gateway.kind }),
     },
     issuer: issuer(),
     audience: AUDIENCE,
@@ -254,6 +282,7 @@ const buildGatewayConfig = async (gateway) => {
     admin: { enabled: gateway.observability.adminUi.enabled !== false },
     // consoleUrl: the gateway's page, which the node's sign-in page links to (Open admin UI is there).
     management: { linkUrl: link.enabled ? link.publicUrl : null, consoleUrl: consoleUrlOf(gateway) },
+    ...(wallet && { wallet }),
   };
 
   const hash = crypto.createHash('sha256').update(JSON.stringify(core)).digest('hex');
@@ -288,6 +317,7 @@ const redactConfig = (config) => ({
       ? { ...config.observability.offload, headers: Object.fromEntries(Object.keys(config.observability.offload.headers).map((name) => [name, REDACTED])) }
       : config.observability.offload,
   },
+  ...(config.wallet && { wallet: redactWallet(config.wallet) }),
 });
 
 // 'no_nodes' | 'not_deployed' | 'error' | 'warning' | 'outdated' | 'deployed'
@@ -307,4 +337,4 @@ const deploymentState = (gateway, hash) => {
   return 'deployed';
 };
 
-module.exports = { buildGatewayConfig, redactConfig, deploymentState, connectionConfig, SCHEMA };
+module.exports = { buildGatewayConfig, redactConfig, deploymentState, connectionConfig, SCHEMA, WALLET_SCHEMA };

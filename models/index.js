@@ -24,6 +24,10 @@ const UsageRecord = require('./UsageRecord');
 const DictionaryField = require('./DictionaryField');
 const DictionaryObject = require('./DictionaryObject');
 const DictionaryProperty = require('./DictionaryProperty');
+const WalletTrustAnchor = require('./WalletTrustAnchor');
+const WalletCredentialType = require('./WalletCredentialType');
+const WalletVerification = require('./WalletVerification');
+const WalletIssuedCredential = require('./WalletIssuedCredential');
 
 // constraints: false keeps these query-only associations (no foreign keys are created),
 // so existing databases need no constraint migrations and cleanup is done explicitly.
@@ -87,6 +91,10 @@ DictionaryProperty.belongsTo(DictionaryField, { as: 'field', foreignKey: 'fieldI
 DictionaryProperty.belongsTo(DictionaryObject, { as: 'refObject', foreignKey: 'refObjectId', ...loose });
 DictionaryField.hasMany(DictionaryProperty, { as: 'usages', foreignKey: 'fieldId', ...loose });
 
+// Wallet gateways: trust anchors, credential types and their records (metadata only).
+Gateway.hasMany(WalletTrustAnchor, { as: 'walletAnchors', foreignKey: 'gatewayId', ...loose });
+Gateway.hasMany(WalletCredentialType, { as: 'walletTypes', foreignKey: 'gatewayId', ...loose });
+
 module.exports = {
   User,
   Membership,
@@ -112,4 +120,8 @@ module.exports = {
   DictionaryField,
   DictionaryObject,
   DictionaryProperty,
+  WalletTrustAnchor,
+  WalletCredentialType,
+  WalletVerification,
+  WalletIssuedCredential,
 };

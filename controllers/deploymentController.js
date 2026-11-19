@@ -11,7 +11,12 @@ const {
   GatewayNode,
   GatewayHandler,
   Policy,
+  WalletTrustAnchor,
+  WalletCredentialType,
+  WalletVerification,
+  WalletIssuedCredential,
 } = require('../models');
+const { KINDS: GATEWAY_KINDS } = require('../services/walletConfig');
 const { sendServerError } = require('../utils/http');
 const { optionalText } = require('../utils/validation');
 const { seal } = require('../utils/secretBox');
@@ -214,6 +219,7 @@ const certificateWarnings = (gateway, credentials) => {
 const serializeGateway = (gateway, extra = {}) => ({
   id: gateway.id,
   name: gateway.name,
+  kind: gateway.kind || 'api',
   publicUrl: gateway.publicUrl,
   autoPush: gateway.autoPush,
   catalog: gateway.catalog ? { id: gateway.catalog.id, name: gateway.catalog.name } : null,
@@ -388,6 +394,14 @@ const validateGateway = async (req, body = {}, { partial = false, gateway = null
     }
   }
   if (body.autoPush !== undefined) fields.autoPush = body.autoPush === true || body.autoPush === 'true' || body.autoPush === 'on';
+  // The kind is chosen once: an API gateway, or an EU Wallet gateway (verifier or issuer).
+  if (!gateway) {
+    const kind = body.kind === undefined || body.kind === '' ? 'api' : body.kind;
+    if (!GATEWAY_KINDS.includes(kind)) return { error: `Gateway type must be one of ${GATEWAY_KINDS.join(', ')}` };
+    fields.kind = kind;
+  } else if (body.kind !== undefined && body.kind !== gateway.kind) {
+    return { error: "A gateway's type can't be changed. Create another gateway.", status: 409 };
+  }
   return { fields };
 };
 
@@ -451,6 +465,10 @@ const deleteGateway = async (req, res) => {
     await sequelize.transaction(async (transaction) => {
       await GatewayNode.destroy({ where: { gatewayId: gateway.id }, transaction });
       await GatewayHandler.destroy({ where: { gatewayId: gateway.id }, transaction });
+      // Wallet gateways: their anchors, credential types and records.
+      for (const model of [WalletTrustAnchor, WalletCredentialType, WalletVerification, WalletIssuedCredential]) {
+        await model.destroy({ where: { gatewayId: gateway.id }, transaction });
+      }
       // Revoke everything issued to it so its certificates can no longer reach the link.
       await GatewayCredential.update({ revokedAt: new Date(), bundleSealed: null }, { where: { gatewayId: gateway.id, revokedAt: null }, transaction });
       await gateway.destroy({ transaction });

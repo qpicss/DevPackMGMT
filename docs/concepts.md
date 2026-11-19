@@ -87,6 +87,15 @@ A **gateway** is the runtime for one catalog. It is made of **nodes**, processes
 
 Clients call `<handler address><API base path><operation path>`, for example `https://api.example.com:8443/orders/v1/orders/42`.
 
+### EU Wallet gateways
+
+A gateway has a **type**, chosen when it is created. **API** gateways serve your APIs as described above. The two **EU Wallet** types serve one business each, with its own certificates:
+
+- a **Relying Party / Verifier** asks EUDI Wallets for credentials (OpenID4VP) and sends the verified claims to the business's backend, its **provider server**;
+- an **Attestation Provider** issues the business's credentials into wallets (OpenID4VCI) and publishes their status list.
+
+The provider server calls the gateway's built-in API with an OAuth token, like any application, and the gateway calls it back with signed webhooks. See the [EU Wallet overview](eu-wallet.md).
+
 ## Policies and connections
 
 A **policy** is a flow of steps that a request goes through on the gateway, built in the flow editor:

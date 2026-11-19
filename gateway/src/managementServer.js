@@ -48,7 +48,8 @@ const createManagementServer = ({ credentials, logger, actions }) => {
           sendJson(res, 200, await actions.applyCredentials(await readJson(req, 1024 * 1024)));
           return;
         case 'GET /v1/usage':
-          sendJson(res, 200, { records: actions.drainUsage() });
+          // Wallet events (verifications, issued credentials, ...) travel with usage.
+          sendJson(res, 200, { records: actions.drainUsage(), wallet: actions.drainWallet ? actions.drainWallet() : [] });
           return;
         case 'GET /v1/requests':
           sendJson(res, 200, actions.listRequests(Object.fromEntries(url.searchParams)));

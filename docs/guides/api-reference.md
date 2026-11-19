@@ -125,7 +125,7 @@ All of these act on the selected organization. Members can read the organization
 
 | Method | Path | |
 |---|---|---|
-| GET, POST | `/api/org/gateways` | Gateways; POST `{ name, publicUrl }` |
+| GET, POST | `/api/org/gateways` | Gateways; POST `{ name, publicUrl, kind }`, kind `api` (default), `wallet-verifier` or `wallet-issuer` (fixed once created) |
 | GET, PUT, DELETE | `/api/org/gateways/:id` | A gateway, including its catalog and auto-push |
 | POST | `/api/org/gateways/:id/nodes` | Registers a node |
 | PUT, DELETE | `/api/org/gateways/:id/nodes/:nodeId` | |
@@ -143,7 +143,17 @@ All of these act on the selected organization. Members can read the organization
 | GET, POST | `/api/org/policies` | Policies (flows) |
 | GET, PUT, DELETE | `/api/org/policies/:id` | |
 | POST | `/api/org/policies/test` | Runs a flow on a gateway node against a sample request |
-| GET, POST | `/api/org/connections` | Upstream connections |
+| GET | `/api/org/gateways/:id/wallet` | EU Wallet gateways: certificates (keys only as "is set"), settings, provider server, anchors, types and problems |
+| PUT | `/api/org/gateways/:id/wallet/identity` | `{ legalName, displayName, legalCategory, accessCertificatePem, accessKeyPem, issuerCertificatePem, issuerKeyPem, registrationCertificate }` |
+| DELETE | `/api/org/gateways/:id/wallet/registration-certificates/:registrationId` | |
+| PUT | `/api/org/gateways/:id/wallet/settings` | `{ settings, provider: { connectionId, callbackUrl, claimsUrl }, walletProviderAnchorIds }` |
+| POST | `/api/org/gateways/:id/wallet/callback-secret` | A new callback secret, shown once |
+| POST, DELETE | `/api/org/gateways/:id/wallet/anchors[/:anchorId]` | Trust anchors `{ name, entitlement, certificatesPem }` |
+| POST, PUT, DELETE | `/api/org/gateways/:id/wallet/types[/:typeId]` | Credential types `{ key, name, vct, claims, anchorIds, validityDays }` |
+| POST | `/api/org/gateways/:id/wallet/setup` | Creates the built-in API, product and provider server application (secret shown once) |
+| GET | `/api/org/gateways/:id/wallet/records` | Verifications or issued credentials (metadata only) |
+| POST | `/api/org/gateways/:id/wallet/credentials/:credentialId/:action` | `revoke`, `suspend` or `reinstate` an issued credential |
+| GET, POST | `/api/org/connections` | Upstream connections; `auth.type` `none`, `basic`, `bearer`, `header` or `oauth2` (`tokenUrl`, `clientId`, `secret`, `clientAuthMethod`, `scope`, `audience`) |
 | GET, PUT, DELETE | `/api/org/connections/:id` | |
 
 ## Platform admin: `/api/admin`

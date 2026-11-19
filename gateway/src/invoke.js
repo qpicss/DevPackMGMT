@@ -93,9 +93,10 @@ const sendHttp = async (connections, entry, { target, method, headers, body, tim
 
 // Adds the connection's credentials unless a header of that name is already set.
 // Returns the names it added, so they can be hidden from scripts and test results.
-const addCredentials = (headers, entry) => {
+const addCredentials = async (headers, entry, connections) => {
   const added = [];
-  for (const [name, value] of Object.entries(authHeaders(entry.config.auth))) {
+  const credentials = connections?.credentialHeaders ? await connections.credentialHeaders(entry) : authHeaders(entry.config.auth);
+  for (const [name, value] of Object.entries(credentials)) {
     if (name in headers) continue;
     headers[name] = value;
     added.push(name);
@@ -195,7 +196,7 @@ const invokeStep = async (node, state, ctx) => {
   else if (config.body === 'none') delete headers['content-type'];
 
   const entry = ctx.connections.get(config.connectionId || (config.target === 'backend' ? ctx.api.connectionId : null));
-  const credentialHeaders = addCredentials(headers, entry);
+  const credentialHeaders = await addCredentials(headers, entry, ctx.connections);
   Object.assign(headers, {
     host: target.host,
     'x-request-id': ctx.requestId,
@@ -289,7 +290,7 @@ const scriptHttp = async (args, meta) => {
     connectionId = found.id;
   }
   const entry = meta.connections.get(connectionId);
-  const credentialHeaders = addCredentials(headers, entry);
+  const credentialHeaders = await addCredentials(headers, entry, meta.connections);
   headers.host = target.host;
   if (body.length || !NO_BODY_METHODS.includes(method)) headers['content-length'] = String(body.length);
 

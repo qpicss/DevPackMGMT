@@ -36,6 +36,7 @@ const { findPublishedProduct } = require('../controllers/catalogController');
 const { DEFAULT_SCRIPT, serializePolicy, problemsOf } = require('../controllers/policyController');
 const { usesBackend, CONDITION_SOURCES, OPERATORS, METHODS } = require('../gateway/src/flow');
 const { gatewayIncludes, describeGateway } = require('../controllers/deploymentController');
+const { describeWallet } = require('../controllers/walletController');
 const { isRecentlySeen, gatewaySetup } = require('../utils/gatewaySetup');
 const { serializeConnection } = require('../controllers/connectionController');
 const { canCreateOrganizations } = require('../services/membership');
@@ -733,6 +734,16 @@ router.get('/gateways/:id', requireOrgAdmin, async (req, res) => {
     usage,
     link: { enabled: link.enabled, url: link.publicUrl },
   });
+});
+
+// EU Wallet gateways: the client's certificates, credential types, trust anchors, provider server, setup and records.
+router.get('/gateways/:id/wallet', requireOrgAdmin, async (req, res) => {
+  const gateway = await findOrgGateway(req);
+  if (!gateway) {
+    return notFound(req, res, 'Gateway not found', "This gateway doesn't exist or belongs to another organization.");
+  }
+  if (!['wallet-verifier', 'wallet-issuer'].includes(gateway.kind)) return res.redirect(`/developer/gateways/${gateway.id}`);
+  res.render('gateway-wallet.html', { user: req.user, wallet: await describeWallet(gateway) });
 });
 
 router.get('/gateways/:id/requests', requireOrgAdmin, async (req, res) => {

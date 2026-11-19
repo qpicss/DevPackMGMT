@@ -176,11 +176,19 @@ Attach a policy to an API on its Overview tab, or to a port as its port policy.
 |---|---|
 | Timeouts and retries | Connect and response timeouts, retries, and the status codes to retry on (idempotent methods only) |
 | Circuit breaker | Open the circuit after a number of failures in a row; cooldown before one trial request |
-| Upstream credentials | None, basic, bearer token or an API key header |
+| Upstream credentials | None, basic, bearer token, an API key header, or OAuth 2.0 client credentials (the gateway fetches and renews the token) |
 | TLS | Verify the backend certificate, server name, trusted CA certificates, and a client certificate and key for mutual TLS |
 | Used by | The APIs and Invoke steps using it |
 
 Secrets are sealed in the database and never shown again after saving.
+
+### EU Wallet gateways
+
+Choose **EU Wallet: Relying Party / Verifier** or **EU Wallet: Attestation Provider** as the type of a new gateway, then click **Wallet** on its page. **Up and running in five steps** at the top of the Wallet page lists what is left: certificates, trust anchors or credential types, the provider server, **Set up**, and a running node. **Fill in a diploma** and **Fill in the EU PID** prefill a credential type.
+
+The page also lists the **Verifications** or **Issued credentials**, with claim names but never values. You can suspend, reinstate or revoke an issued credential there.
+
+Follow [Tutorial 9: Verify a diploma](../tutorials/09-verify-a-diploma.md) or [Tutorial 10: Issue diplomas](../tutorials/10-issue-diplomas.md), and see the [reference](../guides/eu-wallet-gateway.md) for every setting.
 
 ## Members
 
