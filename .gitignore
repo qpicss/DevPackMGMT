@@ -23,3 +23,7 @@ mana2-pki-passwords.txt
 
 # Local notes about certificates
 ssl.txt
+
+# Claude Code: local only
+.claude/
+CLAUDE.md
