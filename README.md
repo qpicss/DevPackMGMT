@@ -1,7 +1,7 @@
 # DevPackMGMT
 
 An API management platform you run yourself. Describe your APIs with OpenAPI, bundle them into products, let developers register applications and request access, and serve the traffic through gateways that check OAuth tokens, enforce rate limits and run your policies.
-
+ [Demo](https://console.phylax.ro/)
 ## EU Digital Identity Wallet, ready in five steps
 
 **Verify and issue EU Digital Identity Wallet credentials without building the wallet protocols yourself.** A business brings its certificates and its own backend; a dedicated gateway does OpenID4VP and OpenID4VCI, signing, encryption, SD-JWT VC, trust chains, key binding and revocation lists, under the business's own name.
